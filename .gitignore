@@ -1,0 +1,6 @@
+.claude/dual-review-loop.*
+.claude/reviews/
+app/.build/
+app/build/
+extension/node_modules/
+extension/dist/

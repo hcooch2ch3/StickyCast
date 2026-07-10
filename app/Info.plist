@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key><string>dev.seongmin.stickycast</string>
+    <key>CFBundleName</key><string>StickyCast</string>
+    <key>CFBundleExecutable</key><string>StickyCast</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>0.1.0</string>
+    <key>LSMinimumSystemVersion</key><string>14.0</string>
+    <key>LSUIElement</key><true/>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key><string>dev.seongmin.stickycast.scheme</string>
+            <key>CFBundleURLSchemes</key><array><string>sticky</string></array>
+        </dict>
+    </array>
+</dict>
+</plist>
