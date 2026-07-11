@@ -1,0 +1,16 @@
+{
+  "name": "sticky-cast-extension",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "test": "vitest run",
+    "deploy": "npm run build && ./deploy.sh"
+  },
+  "devDependencies": {
+    "markedit-api": "github:MarkEdit-app/MarkEdit-api",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21",
+    "vitest": "^2.1.9"
+  }
+}
