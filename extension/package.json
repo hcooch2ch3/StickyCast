@@ -5,7 +5,7 @@
   "scripts": {
     "build": "vite build",
     "test": "vitest run",
-    "deploy": "npm run build && ./deploy.sh"
+    "deploy": "./deploy.sh"
   },
   "devDependencies": {
     "markedit-api": "github:MarkEdit-app/MarkEdit-api",
