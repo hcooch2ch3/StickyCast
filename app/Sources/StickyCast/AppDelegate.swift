@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var store: StickyStore!
     private(set) var controllers: [UUID: StickyPanelController] = [:]  // 강한 참조 — 놓으면 패널이 사라짐 (iter-009)
     private(set) var recentErrors: [String] = []  // 메뉴바 "최근 오류" (Task 11)
+    private var statusMenu: StatusMenuController!
 
     // limits.ts의 MAX_URL_LENGTH(43*1024)와 동일 상수 — 계약 단일 소스를 Swift 측에 미러링 (iter-007).
     private let maxReceivedURLLength = 43 * 1024
@@ -17,8 +18,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let screen = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
         store = StickyStore(defaults: .standard, screenFrame: screen)
 
+        // 메뉴바를 URL 처리보다 먼저 세워, 이후 reportError의 배지 표시가 유효하도록 (iter-010 §7 폴백)
+        statusMenu = StatusMenuController(appDelegate: self)
+
         // 알림 권한: 첫 실행 시 요청 (§7 — 첫 에러 시점 요청은 그 에러를 증발시킴)
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { _, _ in }
+
+        verifySchemeHandler()
 
         restoreStickies()
 
@@ -89,8 +95,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         content.body = message
         UNUserNotificationCenter.current().add(
             UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        )
+        ) { error in
+            if let error { NSLog("StickyCast notification add failed: %@", "\(error)") }  // 조용한 실패 금지 (iter-011)
+        }
         NSLog("StickyCast error: %@", message)
+        statusMenu?.indicateError()  // §7 폴백: 알림이 안 보여도 메뉴바 아이콘 배지로 알림
+    }
+
+    /// §7: sticky:// 핸들러가 이 앱인지 자가 확인. bundleIdentifier로 비교(symlink 견고),
+    /// nil(핸들러 미등록)도 오류로 취급, .app 번들에서만 실행(swift run false-positive 방지, iter-011).
+    /// 매 실행 확인 — 첫 실행 이후 핸들러 하이재킹도 감지 (스펙 §7의 "첫 실행"보다 견고).
+    private func verifySchemeHandler() {
+        guard Bundle.main.bundleURL.pathExtension == "app",
+              let probe = URL(string: "sticky://new") else { return }
+        let myID = Bundle.main.bundleIdentifier
+        guard let handlerURL = NSWorkspace.shared.urlForApplication(toOpen: probe) else {
+            reportError("sticky:// 핸들러가 등록되지 않았습니다. 스티커 발사가 동작하지 않습니다 — 앱을 다시 설치해 주세요.")
+            return
+        }
+        if Bundle(url: handlerURL)?.bundleIdentifier != myID {
+            reportError("sticky:// 핸들러가 이 앱이 아닙니다 (현재: \(handlerURL.lastPathComponent)). 앱을 다시 설치해 주세요.")
+        }
     }
 
     private func errorMessage(for error: StickyURLError) -> String {
