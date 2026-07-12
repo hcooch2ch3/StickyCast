@@ -92,7 +92,9 @@ public final class StickyStore {
             NSLog("StickyStore: 미지원 schemaVersion %d (지원 %d) — 복원 건너뜀", container.schemaVersion, Self.schemaVersion)
             return
         }
-        notes = container.notes.compactMap(\.note)
+        // 소프트 캡 정규화: over-cap 저장(손상/다운그레이드 잔여)이 매 실행 패널 flood를 일으키지 않도록
+        // 복원 시에도 maxStickies로 제한 (add뿐 아니라 restore도 캡 준수, iter-010).
+        notes = Array(container.notes.compactMap(\.note).prefix(Self.maxStickies))
     }
 
     private func save() {

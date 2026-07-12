@@ -98,6 +98,20 @@ final class StickyStoreTests: XCTestCase {
         XCTAssertEqual(store.notes[0].content, "good")
     }
 
+    func testRestoreClampsToCap() {
+        // over-cap 저장 상태(35개)도 복원 시 maxStickies로 정규화 (iter-010)
+        var notesJSON: [String] = []
+        for i in 0..<35 {
+            let uuid = String(format: "%08d-0000-0000-0000-000000000000", i)
+            notesJSON.append("{\"id\":\"\(uuid)\",\"content\":\"n\(i)\",\"frame\":[[0,0],[100,100]],\"opacity\":1,\"createdAt\":0}")
+        }
+        let json = "{\"schemaVersion\":1,\"notes\":[\(notesJSON.joined(separator: ","))]}"
+        defaults.set(json.data(using: .utf8), forKey: "stickyStore.v1")
+        let store = makeStore()
+        store.restore()
+        XCTAssertEqual(store.notes.count, StickyStore.maxStickies)
+    }
+
     func testRemovePersists() {
         let store = makeStore()
         let note = try! store.add(content: "a").get()
