@@ -13,28 +13,30 @@ if (!g.__stickyCastRegistered) {
   MarkEdit.addMainMenuItem([{
     title: "Pop as Sticky",
     action: () => {
-      // 선택 취득: 빈 범위(from==to, 커서) 제외. 역방향 선택(to<from)도 지원하도록
-      // to !== from 로 거르고, 추출은 정렬된 range로 (iter-006 리뷰 반영).
+      // 선택 영역이 있으면 그것을, 없으면 문서 전체를 스티커로.
+      // 역방향 선택(to<from)도 지원하도록 to !== from 으로 거르고, 추출은 정렬된 range로.
       const ranges = MarkEdit.editorAPI.getSelections().filter((r) => r.to !== r.from);
-      const selection = ranges
-        .map((r) => MarkEdit.editorAPI.getText({ from: Math.min(r.from, r.to), to: Math.max(r.from, r.to) }))
-        .join("\n\n");
+      const hasSelection = ranges.length > 0;
+      const content = hasSelection
+        ? ranges
+            .map((r) => MarkEdit.editorAPI.getText({ from: Math.min(r.from, r.to), to: Math.max(r.from, r.to) }))
+            .join("\n\n")
+        : MarkEdit.editorAPI.getText(); // range 생략 → 문서 전체
 
-      if (selection.length === 0) {
-        // 빈 선택: 조용히 무시하지 않고 안내 (사용자 혼란 방지 — "아무것도 안 나옴"). §7 UX 개선.
+      if (content.length === 0) {
         void MarkEdit.showAlert({
-          title: "선택된 텍스트가 없습니다",
-          message: "스티커로 띄울 마크다운을 먼저 드래그해서 선택한 뒤 Pop as Sticky를 누르세요.",
+          title: "띄울 내용이 없습니다",
+          message: "문서가 비어 있습니다. 내용을 입력하거나 일부를 선택한 뒤 다시 시도하세요.",
         });
         return;
       }
 
-      const url = buildStickyURL(selection, MAX_URL_LENGTH);
+      const url = buildStickyURL(content, MAX_URL_LENGTH);
       if (url === null) {
         // 한도 초과: 네이티브 알럿으로 알림 (fire-and-forget). window.alert 금지 — §7.
         void MarkEdit.showAlert({
-          title: "선택 영역이 너무 큽니다",
-          message: "더 짧게 선택한 뒤 다시 시도해 주세요.",
+          title: hasSelection ? "선택 영역이 너무 큽니다" : "문서가 너무 큽니다",
+          message: "스티커는 약 32KB까지만 담을 수 있습니다. 원하는 부분만 선택한 뒤 다시 시도하세요.",
         });
         return;
       }

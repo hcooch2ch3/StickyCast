@@ -8,8 +8,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var recentErrors: [String] = []  // 메뉴바 "최근 오류" (Task 11)
     private var statusMenu: StatusMenuController!
 
-    // limits.ts의 MAX_URL_LENGTH(43*1024)와 동일 상수 — 계약 단일 소스를 Swift 측에 미러링 (iter-007).
-    private let maxReceivedURLLength = 43 * 1024
+    // limits.ts의 MAX_URL_LENGTH와 동일 상수 — 계약 단일 소스를 Swift 측에 미러링 (iter-007).
+    // 실측 안전 천장 32MB (원문 ≈24MB). docs/preflight-results.md 참조.
+    private let maxReceivedURLLength = 32 * 1024 * 1024
 
     // launch 완료 전 도착한 URL 큐 (store nil 크래시 방지, iter-010). 정상 경로에선 비지만 순서 불변식을 강제.
     private var pendingURLs: [URL] = []
