@@ -1,5 +1,10 @@
-// extension/src/limits.ts — URL 길이 한도 (docs/preflight-results.md 실측 근거). 수기 추정치 금지.
-// 실측(2026-07): MarkEdit(WebKit)→OS→앱 경로로 URL 32MB까지 무손실 수신, 64MB에서 드롭.
-// 확인된 안전 천장 32MB를 URL 상한으로 채택 (원문 예산 ≈ 32MB × 3/4 ≈ 24MB — base64 팽창 반영).
-// 주의: 이 값을 올리면 32~64MB 미검증 구간에 들어가 조용한 드롭 위험.
-export const MAX_URL_LENGTH = 32 * 1024 * 1024;
+// extension/src/limits.ts — 스티커 콘텐츠 한도 (원문 바이트 기준). 단일 소스.
+//
+// 세 예산은 별개다 (iter 리뷰):
+//   - 전송(URL): 실측상 32MB까지 무손실(64MB 드롭). 병목 아님.
+//   - 저장(UserDefaults) / 렌더(swift-markdown-ui): 대용량 블롭엔 부적합 → 여기가 실질 병목.
+// 따라서 제품 한도는 전송이 아니라 저장·렌더가 감당할 값으로 정한다.
+//
+// 1MB: 이 프로젝트 최대 문서(≈59KB)의 17배, 책 한 챕터급. 현실의 모든 마크다운 문서를 커버하면서
+// UserDefaults(최대 30장×1MB)와 렌더링을 건강하게 유지. 초과 시 확장이 발사 거부 + 안내.
+export const MAX_CONTENT_BYTES = 1 * 1024 * 1024;

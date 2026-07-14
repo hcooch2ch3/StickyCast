@@ -1,8 +1,11 @@
 import type { MarkEdit as MarkEditAPI } from "markedit-api";
 import { buildStickyURL } from "./encoding";
-import { MAX_URL_LENGTH } from "./limits";
+import { MAX_CONTENT_BYTES } from "./limits";
 
 declare const MarkEdit: MarkEditAPI;
+
+// 한도 초과 안내 문구는 상수에서 파생 (하드코딩 재발 방지, iter 리뷰).
+const MAX_MB = Math.round(MAX_CONTENT_BYTES / (1024 * 1024));
 
 // 멱등 등록 가드: MarkEdit은 확장 스크립트를 웹뷰 컨텍스트당 로드해 같은 스크립트가
 // 여러 번 실행될 수 있다 (pre-flight 2단계 실측). 전역 센티널로 중복 메뉴 등록을 막는다.
@@ -31,12 +34,12 @@ if (!g.__stickyCastRegistered) {
         return;
       }
 
-      const url = buildStickyURL(content, MAX_URL_LENGTH);
+      // 콘텐츠 한도(원문 바이트) 초과면 자르지 않고 거부 + 안내 (§7 조용한 실패 금지 / 잘림 없음).
+      const url = buildStickyURL(content, MAX_CONTENT_BYTES);
       if (url === null) {
-        // 한도 초과: 네이티브 알럿으로 알림 (fire-and-forget). window.alert 금지 — §7.
         void MarkEdit.showAlert({
           title: hasSelection ? "선택 영역이 너무 큽니다" : "문서가 너무 큽니다",
-          message: "스티커는 약 32KB까지만 담을 수 있습니다. 원하는 부분만 선택한 뒤 다시 시도하세요.",
+          message: `스티커는 약 ${MAX_MB}MB까지만 담을 수 있습니다. 원하는 부분만 선택한 뒤 다시 시도하세요.`,
         });
         return;
       }

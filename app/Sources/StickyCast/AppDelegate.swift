@@ -8,9 +8,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var recentErrors: [String] = []  // 메뉴바 "최근 오류" (Task 11)
     private var statusMenu: StatusMenuController!
 
-    // limits.ts의 MAX_URL_LENGTH와 동일 상수 — 계약 단일 소스를 Swift 측에 미러링 (iter-007).
-    // 실측 안전 천장 32MB (원문 ≈24MB). docs/preflight-results.md 참조.
-    private let maxReceivedURLLength = 32 * 1024 * 1024
+    // 수신 측 방어 경계 (iter 리뷰). 정확한 콘텐츠 한도(원문 1MB)는 확장이 발신 시 강제하고,
+    // 앱은 파싱 前 값싼 URL 길이 상한으로 비정상적으로 큰 URL만 걸러 저장·렌더 부담을 막는다.
+    // 콘텐츠 1MB → base64url URL ≈ 1.4MB. 2MB 경계면 rogue 발신자도 원문 ≈1.5MB로 제한(저장·렌더 안전).
+    private let maxReceivedURLLength = 2 * 1024 * 1024
 
     // launch 완료 전 도착한 URL 큐 (store nil 크래시 방지, iter-010). 정상 경로에선 비지만 순서 불변식을 강제.
     private var pendingURLs: [URL] = []
