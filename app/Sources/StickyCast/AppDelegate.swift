@@ -8,11 +8,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var recentErrors: [String] = []  // 메뉴바 "최근 오류" (Task 11)
     private var statusMenu: StatusMenuController!
 
-    // 이중 방어 (계약 §크기한도 "양측 강제"). 파싱 前 값싼 URL 길이 컷으로 비정상 URL을 먼저 거르고,
-    // 파싱 後 디코드된 콘텐츠 바이트를 확장과 동일한 1MB로 강제 — sticky://를 직접 쏘는 rogue 발신자가
-    // 확장의 콘텐츠 캡을 우회하는 경로까지 닫는다 (재리뷰 자가검증).
-    private let maxReceivedURLLength = 2 * 1024 * 1024        // 파싱 前 값싼 상한
-    private let maxContentBytes = 1 * 1024 * 1024             // 확장 MAX_CONTENT_BYTES와 동일 (원문 1MB)
+    // 파싱 前 값싼 URL 길이 상한 (비정상적으로 큰 URL을 디코드 前에 컷). 정확한 콘텐츠 바이트 한도는
+    // StickyStore.maxContentBytes 단일 소스가 add()/restore() 양쪽에서 강제한다 (재리뷰: 상수 통합·restore 갭).
+    private let maxReceivedURLLength = 2 * 1024 * 1024
 
     // launch 완료 전 도착한 URL 큐 (store nil 크래시 방지, iter-010). 정상 경로에선 비지만 순서 불변식을 강제.
     private var pendingURLs: [URL] = []
@@ -52,20 +50,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handle(url: URL) {
-        // 수신측 oversize 거부 (계약 §크기한도 "양측 강제" — OS 진입점이라 확장 외 발신자도 가능).
-        // 파서가 아니라 URL 원문을 쥔 이 최전선에서 판정 (iter-007 리뷰: 소유 경계 = AppDelegate).
+        // 파싱 前 값싼 URL 길이 컷 (거대 URL을 디코드 前에 차단). 정확한 콘텐츠 한도는 store.add()가 강제.
+        // .count는 grapheme 수지만 유효 sticky:// URL은 순수 ASCII(prefix + base64url)라 바이트 수와 동일.
         guard url.absoluteString.count <= maxReceivedURLLength else {
             reportError("스티커 내용이 너무 큽니다.")
             return
         }
         switch StickyURLParser.parse(url) {
         case .success(let content):
-            // 콘텐츠 바이트 캡 강제 (확장과 동일 1MB) — rogue 발신자의 저장·렌더 지뢰 차단
-            guard content.utf8.count <= maxContentBytes else {
-                reportError("스티커 내용이 너무 큽니다.")
-                return
-            }
-            createSticky(content: content)
+            createSticky(content: content)   // 콘텐츠 바이트 캡은 store.add()가 강제 (단일 소스)
         case .failure(let error):
             reportError(errorMessage(for: error))
         }
@@ -77,6 +70,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             addController(for: note)
         case .failure(.capReached):
             reportError("스티커가 최대 \(StickyStore.maxStickies)장입니다. 기존 스티커를 닫아 주세요.")
+        case .failure(.contentTooLarge):
+            reportError("스티커 내용이 너무 큽니다 (최대 약 \(StickyStore.maxContentBytes / (1024 * 1024))MB).")
         }
     }
 

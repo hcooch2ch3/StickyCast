@@ -98,6 +98,49 @@ final class StickyStoreTests: XCTestCase {
         XCTAssertEqual(store.notes[0].content, "good")
     }
 
+    func testAddRejectsOversizeContent() {
+        // 콘텐츠 바이트 캡: 정확히 한도면 허용, 1바이트 초과면 .contentTooLarge (재리뷰)
+        let store = makeStore()
+        let atCap = String(repeating: "a", count: StickyStore.maxContentBytes)
+        if case .failure = store.add(content: atCap) { XCTFail("정확히 한도는 허용돼야") }
+        let overCap = String(repeating: "a", count: StickyStore.maxContentBytes + 1)
+        if case .failure(let e) = store.add(content: overCap) {
+            XCTAssertEqual(e, .contentTooLarge)
+        } else { XCTFail("한도 초과는 .contentTooLarge") }
+    }
+
+    func testAddContentCapCountsBytesNotChars() {
+        // 멀티바이트는 문자 수가 아닌 UTF-8 바이트로 판정 (한글 3바이트)
+        let store = StickyStore(defaults: defaults, screenFrame: screen)
+        // maxContentBytes 바로 아래를 한글로 채워 바이트 기준 판정 확인 (문자수 < 바이트수)
+        let charCount = StickyStore.maxContentBytes / 3      // 한글 charCount개 = 3·charCount 바이트 ≤ 한도
+        let ok = String(repeating: "가", count: charCount)
+        XCTAssertLessThanOrEqual(ok.utf8.count, StickyStore.maxContentBytes)
+        if case .failure = store.add(content: ok) { XCTFail("바이트 한도 내 한글은 허용") }
+        let over = String(repeating: "가", count: charCount + 1) // 3바이트 더 → 초과
+        if case .failure(let e) = store.add(content: over) {
+            XCTAssertEqual(e, .contentTooLarge)
+        } else { XCTFail("바이트 초과 한글은 .contentTooLarge") }
+    }
+
+    func testRestoreDropsOversizeContent() {
+        // 예전(큰 캡) 시절 저장된 >1MB 노트는 복원 시 버려져야 (렌더 프리즈 방지, 재리뷰 MAJOR)
+        let big = String(repeating: "a", count: StickyStore.maxContentBytes + 100)
+        let json = """
+        {"schemaVersion":1,"notes":[
+          {"id":"11111111-1111-1111-1111-111111111111","content":"\(big)",
+           "frame":[[0,0],[100,100]],"opacity":1,"createdAt":0},
+          {"id":"22222222-2222-2222-2222-222222222222","content":"ok",
+           "frame":[[0,0],[100,100]],"opacity":1,"createdAt":0}
+        ]}
+        """
+        defaults.set(json.data(using: .utf8), forKey: "stickyStore.v1")
+        let store = makeStore()
+        store.restore()
+        XCTAssertEqual(store.notes.count, 1)          // 큰 노트 버려지고 정상 1개만
+        XCTAssertEqual(store.notes[0].content, "ok")
+    }
+
     func testRestoreClampsToCap() {
         // over-cap 저장 상태(35개)도 복원 시 maxStickies로 정규화 (iter-010)
         var notesJSON: [String] = []

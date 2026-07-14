@@ -1,7 +1,10 @@
 import Foundation
 import CoreGraphics
 
-public enum StickyStoreError: Error, Equatable { case capReached }
+public enum StickyStoreError: Error, Equatable {
+    case capReached          // 스티커 장수(maxStickies) 초과
+    case contentTooLarge     // 콘텐츠 바이트(maxContentBytes) 초과
+}
 
 public struct StickyNote: Codable, Identifiable, Equatable {
     public let id: UUID
@@ -19,6 +22,9 @@ public struct StickyNote: Codable, Identifiable, Equatable {
 public final class StickyStore {
     private static let schemaVersion = 1
     public static let maxStickies = 30
+    // 콘텐츠 바이트 한도 — 확장 limits.ts의 MAX_CONTENT_BYTES와 동일 값의 단일 소스(앱 측).
+    // 쓰기(add)와 읽기(restore) 양쪽에서 강제해 저장·렌더 부담을 막는다 (재리뷰: restore 경로 갭).
+    public static let maxContentBytes = 1 * 1024 * 1024
     private static let storageKey = "stickyStore.v1"
     private static let cardSize = CGSize(width: 320, height: 240)
     private static let margin: CGFloat = 16
@@ -50,6 +56,7 @@ public final class StickyStore {
     }
 
     public func add(content: String) -> Result<StickyNote, StickyStoreError> {
+        guard content.utf8.count <= Self.maxContentBytes else { return .failure(.contentTooLarge) }
         guard notes.count < Self.maxStickies else { return .failure(.capReached) }
         let note = StickyNote(
             id: UUID(), content: content,
@@ -92,9 +99,14 @@ public final class StickyStore {
             NSLog("StickyStore: 미지원 schemaVersion %d (지원 %d) — 복원 건너뜀", container.schemaVersion, Self.schemaVersion)
             return
         }
-        // 소프트 캡 정규화: over-cap 저장(손상/다운그레이드 잔여)이 매 실행 패널 flood를 일으키지 않도록
-        // 복원 시에도 maxStickies로 제한 (add뿐 아니라 restore도 캡 준수, iter-010).
-        notes = Array(container.notes.compactMap(\.note).prefix(Self.maxStickies))
+        // 복원 정규화: over-cap 저장(손상/다운그레이드/구버전 큰 노트 잔여)이 flood/렌더 프리즈를
+        // 일으키지 않도록, 콘텐츠 바이트 초과 노트를 버리고 장수도 maxStickies로 제한한다.
+        // (재리뷰 MAJOR: restore가 예전 24MB 캡 시절 >1MB 노트를 무가드로 렌더하던 갭 차단.)
+        notes = Array(
+            container.notes.compactMap(\.note)
+                .filter { $0.content.utf8.count <= Self.maxContentBytes }
+                .prefix(Self.maxStickies)
+        )
     }
 
     private func save() {
