@@ -8,10 +8,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var recentErrors: [String] = []  // 메뉴바 "최근 오류" (Task 11)
     private var statusMenu: StatusMenuController!
 
-    // 수신 측 방어 경계 (iter 리뷰). 정확한 콘텐츠 한도(원문 1MB)는 확장이 발신 시 강제하고,
-    // 앱은 파싱 前 값싼 URL 길이 상한으로 비정상적으로 큰 URL만 걸러 저장·렌더 부담을 막는다.
-    // 콘텐츠 1MB → base64url URL ≈ 1.4MB. 2MB 경계면 rogue 발신자도 원문 ≈1.5MB로 제한(저장·렌더 안전).
-    private let maxReceivedURLLength = 2 * 1024 * 1024
+    // 이중 방어 (계약 §크기한도 "양측 강제"). 파싱 前 값싼 URL 길이 컷으로 비정상 URL을 먼저 거르고,
+    // 파싱 後 디코드된 콘텐츠 바이트를 확장과 동일한 1MB로 강제 — sticky://를 직접 쏘는 rogue 발신자가
+    // 확장의 콘텐츠 캡을 우회하는 경로까지 닫는다 (재리뷰 자가검증).
+    private let maxReceivedURLLength = 2 * 1024 * 1024        // 파싱 前 값싼 상한
+    private let maxContentBytes = 1 * 1024 * 1024             // 확장 MAX_CONTENT_BYTES와 동일 (원문 1MB)
 
     // launch 완료 전 도착한 URL 큐 (store nil 크래시 방지, iter-010). 정상 경로에선 비지만 순서 불변식을 강제.
     private var pendingURLs: [URL] = []
@@ -59,6 +60,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         switch StickyURLParser.parse(url) {
         case .success(let content):
+            // 콘텐츠 바이트 캡 강제 (확장과 동일 1MB) — rogue 발신자의 저장·렌더 지뢰 차단
+            guard content.utf8.count <= maxContentBytes else {
+                reportError("스티커 내용이 너무 큽니다.")
+                return
+            }
             createSticky(content: content)
         case .failure(let error):
             reportError(errorMessage(for: error))
