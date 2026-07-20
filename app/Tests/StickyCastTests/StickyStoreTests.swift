@@ -191,6 +191,25 @@ final class StickyStoreTests: XCTestCase {
         XCTAssertEqual(outcome.droppedOverCap, 0)
     }
 
+    func testRestoreCompactsDroppedBlob() {
+        // 드롭 후 정규화 결과가 영속화되어, 재복원 시 드롭이 반복되지 않는다 (A-Minor: restore 컴팩션).
+        let big = String(repeating: "a", count: StickyStore.maxContentBytes + 100)
+        let json = """
+        {"schemaVersion":1,"notes":[
+          {"id":"11111111-1111-1111-1111-111111111111","content":"\(big)",
+           "frame":[[0,0],[100,100]],"opacity":1,"createdAt":0},
+          {"id":"22222222-2222-2222-2222-222222222222","content":"ok",
+           "frame":[[0,0],[100,100]],"opacity":1,"createdAt":0}
+        ]}
+        """
+        defaults.set(json.data(using: .utf8), forKey: "stickyStore.v1")
+        let first = makeStore().restore()
+        XCTAssertTrue(first.hasDrops)                 // 첫 복원: 큰 노트 드롭
+        let second = makeStore().restore()
+        XCTAssertFalse(second.hasDrops)               // 재복원: 이미 컴팩션되어 드롭 없음
+        XCTAssertEqual(second.restored, 1)
+    }
+
     func testRemovePersists() {
         let store = makeStore()
         let note = try! store.add(content: "a").get()

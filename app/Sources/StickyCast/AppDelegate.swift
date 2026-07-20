@@ -50,9 +50,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handle(url: URL) {
-        // 파싱 前 값싼 URL 길이 컷 (거대 URL을 디코드 前에 차단). 정확한 콘텐츠 한도는 store.add()가 강제.
-        // .count는 grapheme 수지만 유효 sticky:// URL은 순수 ASCII(prefix + base64url)라 바이트 수와 동일.
-        guard url.absoluteString.count <= maxReceivedURLLength else {
+        // 파싱 前 값싼 URL 길이 컷 (거대 URL을 디코드 前에 차단, 바이트 기준). 정확한 콘텐츠 한도는 store.add()가 강제.
+        // .utf8.count로 바이트 판정 — 멀티바이트 다수인 rogue URL이 grapheme 수 과소계수로 컷을 우회하지 못하게.
+        guard url.absoluteString.utf8.count <= maxReceivedURLLength else {
             reportError("스티커 내용이 너무 큽니다.")
             return
         }
@@ -113,7 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// §7: sticky:// 핸들러가 이 앱인지 자가 확인. bundleIdentifier로 비교(symlink 견고),
     /// nil(핸들러 미등록)도 오류로 취급, .app 번들에서만 실행(swift run false-positive 방지, iter-011).
-    /// 매 실행 확인 — 첫 실행 이후 핸들러 하이재킹도 감지 (스펙 §7의 "첫 실행"보다 견고).
+    /// 앱 실행 시 1회 확인(매 URL 아님) — 다음 실행에서 핸들러 하이재킹도 감지 (스펙 §7의 "첫 실행 1회"보다 견고).
     private func verifySchemeHandler() {
         guard Bundle.main.bundleURL.pathExtension == "app",
               let probe = URL(string: "sticky://new") else { return }

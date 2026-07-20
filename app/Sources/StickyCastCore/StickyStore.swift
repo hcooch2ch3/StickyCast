@@ -119,11 +119,15 @@ public final class StickyStore {
         let withinSize = decoded.filter { $0.content.utf8.count <= Self.maxContentBytes }
         let clamped = Array(withinSize.prefix(Self.maxStickies))
         notes = clamped
-        return RestoreOutcome(
+        let outcome = RestoreOutcome(
             restored: clamped.count,
             droppedOversize: decoded.count - withinSize.count,
             droppedOverCap: withinSize.count - clamped.count
         )
+        // 드롭이 있었으면 정규화 결과를 즉시 영속화 — 낡은 over-cap blob이 다음 mutation까지
+        // 잔존(매 실행 드롭 반복·저장소 비대)하지 않도록 컴팩션 (A-Minor: restore 후 미저장 갭).
+        if outcome.hasDrops { save() }
+        return outcome
     }
 
     private func save() {
