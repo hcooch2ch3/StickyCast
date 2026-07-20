@@ -22,10 +22,11 @@ if (!g.__stickyCastRegistered) {
       const hasSelection = selections.some((r) => r.to !== r.from);
       const content = deriveContent(selections, (range) => MarkEdit.editorAPI.getText(range));
 
-      if (content.length === 0) {
+      // 공백만 있는 문서/선택도 빈 것으로 취급 (보이지 않는 빈 카드 발사 방지). 발사 콘텐츠는 원문 보존.
+      if (content.trim().length === 0) {
         void MarkEdit.showAlert({
           title: "띄울 내용이 없습니다",
-          message: "문서가 비어 있습니다. 내용을 입력하거나 일부를 선택한 뒤 다시 시도하세요.",
+          message: "문서가 비어 있거나 공백뿐입니다. 내용을 입력하거나 일부를 선택한 뒤 다시 시도하세요.",
         });
         return;
       }
