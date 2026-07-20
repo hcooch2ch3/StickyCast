@@ -1,0 +1,55 @@
+{
+  "_comment": "sticky:// 인코드/디코드 크로스-컴포넌트 왕복 픽스처. encoded는 실제 확장 인코더(toBase64URL)로 기계 생성 — 손으로 타이핑한 값이 아님. 확장 테스트(crosscomponent.test.ts)는 인코더가 이 encoded를 재현하는지, 앱 테스트(CrossComponentTests.swift)는 파서가 같은 encoded를 input으로 복원하는지 검증한다. 두 컴포넌트가 하나의 기계 생성 소스를 공유하므로 양쪽이 같은 오답 벡터를 함께 통과하는 리스크가 제거된다. 재생성: 이 파일 상단 주석의 스크립트 참고.",
+  "fixtures": [
+    {
+      "input": "안녕🎉",
+      "encoded": "7JWI64WV8J-OiQ",
+      "note": "한글+이모지, - 포함"
+    },
+    {
+      "input": "hi",
+      "encoded": "aGk",
+      "note": "ASCII, 무패딩"
+    },
+    {
+      "input": "읽기???",
+      "encoded": "7J296riwPz8_",
+      "note": "multibyte + _ 포함 (_→/ 역변환 최취약 경로)"
+    },
+    {
+      "input": "가",
+      "encoded": "6rCA",
+      "note": "NFC 한글 3바이트"
+    },
+    {
+      "input": "가",
+      "encoded": "4YSA4YWh",
+      "note": "NFD 분해 한글(U+1100 U+1161) — 바이트 보존 검증"
+    },
+    {
+      "input": "🎉🎉🎉",
+      "encoded": "8J-OifCfjonwn46J",
+      "note": "이모지 연속(서로게이트 페어)"
+    },
+    {
+      "input": "line1\nline2\n\npara2",
+      "encoded": "bGluZTEKbGluZTIKCnBhcmEy",
+      "note": "개행/빈 줄"
+    },
+    {
+      "input": "# 제목\n- a\n- b\n\n```js\nconst x = 1;\n```",
+      "encoded": "IyDsoJzrqqkKLSBhCi0gYgoKYGBganMKY29uc3QgeCA9IDE7CmBgYA",
+      "note": "마크다운 + 백틱 코드펜스"
+    },
+    {
+      "input": "trailing spaces   ",
+      "encoded": "dHJhaWxpbmcgc3BhY2VzICAg",
+      "note": "끝 공백 보존"
+    },
+    {
+      "input": "混合 mixed 텍스트 123 !@#",
+      "encoded": "5re35ZCIIG1peGVkIO2FjeyKpO2KuCAxMjMgIUAj",
+      "note": "한자+라틴+한글+기호 혼합"
+    }
+  ]
+}
