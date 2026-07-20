@@ -6,3 +6,7 @@ extension/node_modules/
 extension/dist/
 .omc/
 **/.omc/
+.omx/
+**/.omx/
+.superpowers/
+.omx-*/

@@ -63,9 +63,11 @@ cd app && swift test          # 코어 로직 단위 테스트 (파서·스토�
 cd extension && npm test      # 인코딩 단위 테스트
 ```
 
-설계 배경과 검증 이력은 [`docs/`](docs/)를 참고하세요 (`preflight-results.md`, `url-scheme-spec.md`, `superpowers/specs/`, `superpowers/plans/`).
+설계 배경과 검증 이력은 [`docs/`](docs/)를 참고하세요 (`url-scheme-spec.md`, `preflight-results.md`, `markedit-api-notes.md`, `e2e-checklist.md`).
 
 ## 라이선스 · 크레딧
+
+이 프로젝트는 [MIT 라이선스](LICENSE)로 배포됩니다.
 
 - 마크다운 렌더링: [swift-markdown-ui](https://github.com/gonzalezreal/swift-markdown-ui) (MIT)
 - MarkEdit API 타입: [MarkEdit-api](https://github.com/MarkEdit-app/MarkEdit-api)
