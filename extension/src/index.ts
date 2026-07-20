@@ -1,5 +1,6 @@
 import type { MarkEdit as MarkEditAPI } from "markedit-api";
 import { buildStickyURL } from "./encoding";
+import { deriveContent } from "./selection";
 import { MAX_CONTENT_BYTES } from "./limits";
 
 declare const MarkEdit: MarkEditAPI;
@@ -16,15 +17,10 @@ if (!g.__stickyCastRegistered) {
   MarkEdit.addMainMenuItem([{
     title: "Pop as Sticky",
     action: () => {
-      // 선택 영역이 있으면 그것을, 없으면 문서 전체를 스티커로.
-      // 역방향 선택(to<from)도 지원하도록 to !== from 으로 거르고, 추출은 정렬된 range로.
-      const ranges = MarkEdit.editorAPI.getSelections().filter((r) => r.to !== r.from);
-      const hasSelection = ranges.length > 0;
-      const content = hasSelection
-        ? ranges
-            .map((r) => MarkEdit.editorAPI.getText({ from: Math.min(r.from, r.to), to: Math.max(r.from, r.to) }))
-            .join("\n\n")
-        : MarkEdit.editorAPI.getText(); // range 생략 → 문서 전체
+      // 선택 영역이 있으면 그것을, 없으면 문서 전체를 스티커로. 파생 로직은 deriveContent(순수 함수, 테스트 대상).
+      const selections = MarkEdit.editorAPI.getSelections();
+      const hasSelection = selections.some((r) => r.to !== r.from);
+      const content = deriveContent(selections, (range) => MarkEdit.editorAPI.getText(range));
 
       if (content.length === 0) {
         void MarkEdit.showAlert({
