@@ -76,10 +76,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func restoreStickies() {
-        store.restore()
+        let outcome = store.restore()
         for note in store.notes {
             addController(for: note)
         }
+        // §7: 복원 시 노트를 버렸으면 조용히 넘어가지 않고 사용자에게 알린다 (수신 경로와 일관).
+        guard outcome.hasDrops else { return }
+        var parts: [String] = []
+        if outcome.droppedOversize > 0 { parts.append("크기 초과 \(outcome.droppedOversize)개") }
+        if outcome.droppedOverCap > 0 { parts.append("최대 장수 초과 \(outcome.droppedOverCap)개") }
+        reportError("이전 스티커 \(parts.joined(separator: ", "))를 복원하지 못했습니다.")
     }
 
     private func addController(for note: StickyNote) {

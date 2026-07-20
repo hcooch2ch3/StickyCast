@@ -6,6 +6,15 @@ public enum StickyStoreError: Error, Equatable {
     case contentTooLarge     // 콘텐츠 바이트(maxContentBytes) 초과
 }
 
+/// restore() 결과 요약. 드롭 건수를 호출부(AppDelegate)가 사용자에게 알리도록 노출 —
+/// §7 "조용한 실패 금지": 복원 시 노트를 버리면 수신 경로처럼 사용자에게 보이게 알린다.
+public struct RestoreOutcome: Equatable {
+    public let restored: Int         // 실제 복원된 노트 수
+    public let droppedOversize: Int  // 콘텐츠 바이트 초과로 버려진 수
+    public let droppedOverCap: Int   // maxStickies 초과로 잘려나간 수
+    public var hasDrops: Bool { droppedOversize > 0 || droppedOverCap > 0 }
+}
+
 public struct StickyNote: Codable, Identifiable, Equatable {
     public let id: UUID
     public var content: String
@@ -85,27 +94,35 @@ public final class StickyStore {
         save()
     }
 
-    public func restore() {
-        guard let data = defaults.data(forKey: Self.storageKey) else { return }
+    @discardableResult
+    public func restore() -> RestoreOutcome {
+        let none = RestoreOutcome(restored: 0, droppedOversize: 0, droppedOverCap: 0)
+        guard let data = defaults.data(forKey: Self.storageKey) else { return none }
         let container: Container
         do {
             container = try JSONDecoder().decode(Container.self, from: data)
         } catch {
             NSLog("StickyStore: restore 실패 (컨테이너 디코드) — %@", "\(error)")  // §7 조용한 실패 금지
-            return
+            return none
         }
         // 마이그레이션 경계: 미지원 버전은 로드하지 않는다 (v1으로 덮어써 다운그레이드/손실 방지)
         guard container.schemaVersion == Self.schemaVersion else {
             NSLog("StickyStore: 미지원 schemaVersion %d (지원 %d) — 복원 건너뜀", container.schemaVersion, Self.schemaVersion)
-            return
+            return none
         }
         // 복원 정규화: over-cap 저장(손상/다운그레이드/구버전 큰 노트 잔여)이 flood/렌더 프리즈를
         // 일으키지 않도록, 콘텐츠 바이트 초과 노트를 버리고 장수도 maxStickies로 제한한다.
         // (재리뷰 MAJOR: restore가 예전 24MB 캡 시절 >1MB 노트를 무가드로 렌더하던 갭 차단.)
-        notes = Array(
-            container.notes.compactMap(\.note)
-                .filter { $0.content.utf8.count <= Self.maxContentBytes }
-                .prefix(Self.maxStickies)
+        // 손상 항목(compactMap nil)은 FailableNote 격리로 이미 조용히 제거됨 — 여기 드롭 집계는
+        // 크기/장수 초과만 센다(사용자에게 알릴 대상, §7). 집계는 호출부가 알림에 사용.
+        let decoded = container.notes.compactMap(\.note)
+        let withinSize = decoded.filter { $0.content.utf8.count <= Self.maxContentBytes }
+        let clamped = Array(withinSize.prefix(Self.maxStickies))
+        notes = clamped
+        return RestoreOutcome(
+            restored: clamped.count,
+            droppedOversize: decoded.count - withinSize.count,
+            droppedOverCap: withinSize.count - clamped.count
         )
     }
 

@@ -155,6 +155,42 @@ final class StickyStoreTests: XCTestCase {
         XCTAssertEqual(store.notes.count, StickyStore.maxStickies)
     }
 
+    func testRestoreReportsDropCounts() {
+        // §7: 복원 드롭을 호출부가 사용자에게 알릴 수 있도록 건수를 보고한다.
+        // 구성: oversize 2개 + 정상 34개 = 36개 → withinSize 34, cap(30) 초과 4개 잘림 → restored 30.
+        let big = String(repeating: "a", count: StickyStore.maxContentBytes + 100)
+        var notesJSON: [String] = []
+        for i in 0..<2 {
+            let uuid = String(format: "%08d-1111-1111-1111-111111111111", i)
+            notesJSON.append("{\"id\":\"\(uuid)\",\"content\":\"\(big)\",\"frame\":[[0,0],[100,100]],\"opacity\":1,\"createdAt\":0}")
+        }
+        for i in 0..<34 {
+            let uuid = String(format: "%08d-2222-2222-2222-222222222222", i)
+            notesJSON.append("{\"id\":\"\(uuid)\",\"content\":\"n\(i)\",\"frame\":[[0,0],[100,100]],\"opacity\":1,\"createdAt\":0}")
+        }
+        let json = "{\"schemaVersion\":1,\"notes\":[\(notesJSON.joined(separator: ","))]}"
+        defaults.set(json.data(using: .utf8), forKey: "stickyStore.v1")
+        let store = makeStore()
+        let outcome = store.restore()
+        XCTAssertEqual(outcome.droppedOversize, 2)
+        XCTAssertEqual(outcome.droppedOverCap, 4)   // withinSize 34 - clamp 30
+        XCTAssertEqual(outcome.restored, StickyStore.maxStickies)
+        XCTAssertTrue(outcome.hasDrops)
+        XCTAssertEqual(store.notes.count, StickyStore.maxStickies)
+    }
+
+    func testRestoreCleanStateReportsNoDrops() {
+        // 정상 복원(드롭 없음)은 hasDrops == false → 사용자 알림 안 뜸
+        let store = makeStore()
+        _ = try! store.add(content: "a").get()
+        let store2 = makeStore()
+        let outcome = store2.restore()
+        XCTAssertFalse(outcome.hasDrops)
+        XCTAssertEqual(outcome.restored, 1)
+        XCTAssertEqual(outcome.droppedOversize, 0)
+        XCTAssertEqual(outcome.droppedOverCap, 0)
+    }
+
     func testRemovePersists() {
         let store = makeStore()
         let note = try! store.add(content: "a").get()
