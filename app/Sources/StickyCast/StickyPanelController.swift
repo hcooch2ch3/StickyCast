@@ -26,7 +26,13 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
         panel.contentView = NSHostingView(rootView: StickyContentView(
             content: note.content,
             initialOpacity: note.opacity,
+            initialPinned: note.pinned == true,
             onClose: { [weak self] in self?.close() },
+            onTogglePin: { [weak self] pinned in         // 진실한 핀 배선(dual-review iter-004 #1) — Task 6에서 생성 시 초기 적용 추가
+                guard let self else { return }
+                self.store.setPinned(id: self.noteID, pinned: pinned)
+                self.panel.applyPinned(pinned)
+            },
             onOpacityChange: { [weak self] v in self?.panel.alphaValue = v },
             onOpacityCommit: { [weak self] v in
                 guard let self else { return }
