@@ -9,4 +9,5 @@ extension/dist/
 .omx/
 **/.omx/
 .superpowers/
+docs/superpowers/
 .omx-*/
