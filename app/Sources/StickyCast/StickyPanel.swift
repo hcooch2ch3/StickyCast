@@ -8,8 +8,10 @@ final class StickyPanel: NSPanel {
             backing: .buffered,
             defer: false
         )
-        isFloatingPanel = true
-        level = .floating
+        isFloatingPanel = false   // 기본 비고정. 핀 토글 시 applyPinned가 재조정.
+        level = .normal           // 기본: 비고정(작업 앱에 덮여 화면을 가리지 않음). 핀 시 applyPinned가 .floating으로.
+        // collectionBehavior 유지(canJoinAllSpaces): 페이즈 1은 모든 Space 추종 유지 —
+        // 제거하면 nonactivating 앱에서 off-Space 노트 도달 불가 회귀(계획 A안). Space 스코핑은 페이즈 2(허브).
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         isMovableByWindowBackground = true   // 본문 드래그 이동
         isOpaque = false
@@ -26,4 +28,13 @@ final class StickyPanel: NSPanel {
         minSize = NSSize(width: 180, height: 120)
     }
     override var canBecomeKey: Bool { true }
+
+    /// 핀 토글: 항상-위(.floating) ↔ 평범(.normal). isFloatingPanel도 레벨과 짝을 맞춘다.
+    /// hidesOnDeactivate=false를 매 토글 재확인 — cross-app 상시노출 불변식(§init)이 어떤 AppKit
+    /// 플래그 상호작용에도 흔들리지 않게 하는 보험 (dual-review iter-003, critic).
+    func applyPinned(_ pinned: Bool) {
+        hidesOnDeactivate = false
+        level = pinned ? .floating : .normal
+        isFloatingPanel = pinned
+    }
 }
