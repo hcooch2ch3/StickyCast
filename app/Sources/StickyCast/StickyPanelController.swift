@@ -57,6 +57,8 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
     }
 
     func show() { panel.orderFrontRegardless() }
+    func hide() { panel.orderOut(nil) }   // 비파괴 숨김 — 노트·컨트롤러는 살아있음(close와 다름)
+    var isVisible: Bool { panel.isVisible }   // orderOut 후 false. 메뉴 라벨을 실제 가시성에서 파생하기 위함.
     func bringToFront() { panel.orderFrontRegardless() }
 
     /// §5.3 "앞으로 + 강조": 알파를 잠깐 낮췄다 복원하는 플래시.

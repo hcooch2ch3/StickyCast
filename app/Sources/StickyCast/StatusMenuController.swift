@@ -59,6 +59,14 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             }
         }
         menu.addItem(.separator())
+        // 스티커가 있을 때만 토글 표시. 라벨은 실제 가시성에서 파생(하나라도 보이면 "숨기기", 전부 숨겨졌으면 "보이기").
+        if !liveNotes.isEmpty {
+            if appDelegate.anyStickerVisible {
+                menu.addItem(makeItem("모두 숨기기", #selector(hideAllStickers)))
+            } else {
+                menu.addItem(makeItem("모두 보이기", #selector(showAllStickers)))
+            }
+        }
         menu.addItem(makeItem("모두 앞으로", #selector(bringAllToFront)))
         menu.addItem(makeItem("모두 닫기", #selector(closeAll)))
         menu.addItem(.separator())
@@ -79,6 +87,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     @objc private func bringAllToFront() {
         appDelegate.controllers.values.forEach { $0.bringToFront() }
     }
+    @objc private func hideAllStickers() { appDelegate.hideAllStickers() }
+    @objc private func showAllStickers() { appDelegate.showAllStickers() }
     @objc private func closeAll() {
         // close()가 controllers에서 항목을 제거하므로 스냅샷 후 순회 (순회 중 변형 방지)
         Array(appDelegate.controllers.values).forEach { $0.close() }

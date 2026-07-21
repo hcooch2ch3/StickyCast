@@ -8,6 +8,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var recentErrors: [String] = []  // 메뉴바 "최근 오류" (Task 11)
     private var statusMenu: StatusMenuController!
 
+    // "모두 숨기기/보이기" 토글 라벨은 별도 상태 bool이 아니라 실제 창 가시성에서 파생한다
+    // (dual-review iter-006: 전역 bool은 per-window 상태와 어긋나 라벨이 거짓말함).
+    var anyStickerVisible: Bool { controllers.values.contains { $0.isVisible } }
+
     // 파싱 前 값싼 URL 길이 상한 (비정상적으로 큰 URL을 디코드 前에 컷). 정확한 콘텐츠 바이트 한도는
     // StickyStore.maxContentBytes 단일 소스가 add()/restore() 양쪽에서 강제한다 (재리뷰: 상수 통합·restore 갭).
     private let maxReceivedURLLength = 2 * 1024 * 1024
@@ -67,7 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func createSticky(content: String) {
         switch store.add(content: content) {
         case .success(let note):
-            addController(for: note)
+            addController(for: note)   // 새 스티커는 show()로 뜸 → anyStickerVisible이 자동으로 true
         case .failure(.capReached):
             reportError("스티커가 최대 \(StickyStore.maxStickies)장입니다. 기존 스티커를 닫아 주세요.")
         case .failure(.contentTooLarge):
@@ -95,6 +99,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controllers[note.id] = controller
         controller.show()
     }
+
+    /// 모든 스티커를 화면에서 감춘다(비파괴 — 노트·컨트롤러 유지). 메뉴바에서 호출.
+    func hideAllStickers() { controllers.values.forEach { $0.hide() } }
+    /// 감춘 스티커를 모두 다시 앞으로 띄운다.
+    func showAllStickers() { controllers.values.forEach { $0.show() } }
 
     /// §7 조용한 실패 금지: 알림 시도 + 메뉴바 최근 오류에 항상 적재 (권한 무관 폴백)
     func reportError(_ message: String) {
