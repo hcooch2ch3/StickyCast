@@ -218,4 +218,23 @@ final class StickyStoreTests: XCTestCase {
         store2.restore()
         XCTAssertEqual(store2.notes.count, 0)
     }
+
+    func testMigrationV1NoteWithoutPinnedSurvivesFullFidelity() {
+        // 핀 필드가 없던 v1 저장본이 새 구조로 디코드될 때 전 필드 왕복 + pinned == nil 생존
+        let v1 = """
+        {"schemaVersion":1,"notes":[
+          {"id":"11111111-1111-1111-1111-111111111111","content":"레거시",
+           "frame":[[10,20],[300,200]],"opacity":0.8,"createdAt":0}
+        ]}
+        """
+        defaults.set(v1.data(using: .utf8), forKey: "stickyStore.v1")
+        let store = makeStore()
+        store.restore()
+        XCTAssertEqual(store.notes.count, 1)
+        let n = store.notes[0]
+        XCTAssertEqual(n.content, "레거시")
+        XCTAssertEqual(n.frame, CGRect(x: 10, y: 20, width: 300, height: 200))
+        XCTAssertEqual(n.opacity, 0.8)
+        XCTAssertNil(n.pinned)
+    }
 }

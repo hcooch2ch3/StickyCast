@@ -21,6 +21,7 @@ public struct StickyNote: Codable, Identifiable, Equatable {
     public var frame: CGRect
     public var opacity: Double
     public let createdAt: Date
+    public var pinned: Bool? = nil   // 항상-위(.floating) 여부. nil=비고정. 옵셔널이라 누락 키를 synthesized 디코더가 nil로 채워 v1 노트가 생존한다.
 }
 
 /// 스티커 상태의 단일 진실 소스. AppKit 창 코드와 무관 — 단위 테스트 대상.
