@@ -41,6 +41,8 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
                 self.store.commitOpacity(id: self.noteID, opacity: v)
             }
         ))
+        // 복원/생성 시 저장된 핀 상태를 창 레벨에 반영 (dual-review iter-003: 복원 시 applyPinned 필수)
+        panel.applyPinned(note.pinned == true)
     }
 
     deinit { moveDebounce?.invalidate() }
