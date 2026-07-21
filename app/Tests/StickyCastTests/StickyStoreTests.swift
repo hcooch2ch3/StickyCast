@@ -237,4 +237,15 @@ final class StickyStoreTests: XCTestCase {
         XCTAssertEqual(n.opacity, 0.8)
         XCTAssertNil(n.pinned)
     }
+
+    func testSetPinnedPersistsRoundTrip() {
+        let store = makeStore()
+        let note = try! store.add(content: "핀").get()
+        XCTAssertNil(store.notes[0].pinned)     // 기본은 비고정
+        store.setPinned(id: note.id, pinned: true)
+        let store2 = makeStore()
+        store2.restore()
+        XCTAssertEqual(store2.notes.count, 1)
+        XCTAssertEqual(store2.notes[0].pinned, true)
+    }
 }

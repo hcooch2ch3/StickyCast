@@ -95,6 +95,12 @@ public final class StickyStore {
         save()
     }
 
+    public func setPinned(id: UUID, pinned: Bool) {
+        guard let i = notes.firstIndex(where: { $0.id == id }) else { return }
+        notes[i].pinned = pinned
+        save()
+    }
+
     @discardableResult
     public func restore() -> RestoreOutcome {
         let none = RestoreOutcome(restored: 0, droppedOversize: 0, droppedOverCap: 0)
