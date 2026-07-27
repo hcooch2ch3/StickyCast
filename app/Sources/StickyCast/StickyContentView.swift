@@ -12,7 +12,9 @@ struct StickyContentView: View {
     let onContentChange: ((String) -> Bool)?   // 인라인 편집 저장 콜백. 성공 여부 반환(실패 시 편집 유지). nil이면 편집 비활성
     let isLinked: Bool                          // 파일 연결 스티커 여부 → "원본에 저장" 버튼 노출
     let onSaveToFile: (() -> Bool)?             // 현재 내용을 원본 파일에 수동 반영 (연결 스티커만). 성공 여부 반환.
+    let onColorChange: ((String?) -> Void)?     // 포스트잇 색상 변경 (nil=기본)
 
+    @Environment(\.colorScheme) private var systemColorScheme
     @State private var hovering = false
     @State private var opacity: Double
     @State private var pinned: Bool
@@ -27,6 +29,9 @@ struct StickyContentView: View {
     // "원본에 저장" 결과 즉각 피드백 — 성공 초록 체크 / 실패 빨강 X, ~1.2s 후 복귀
     private enum SaveFlash { case success, failure }
     @State private var saveFlash: SaveFlash? = nil
+    // 포스트잇 색상 — 스와치 팝오버 + 현재 선택(키 저장은 콜백, 즉시 반영은 @State)
+    @State private var colorKey: String?
+    @State private var showColorPicker = false
 
     init(content: String, initialOpacity: Double, initialPinned: Bool,
          onClose: @escaping () -> Void,
@@ -35,7 +40,9 @@ struct StickyContentView: View {
          onOpacityCommit: @escaping (Double) -> Void,
          onContentChange: ((String) -> Bool)? = nil,
          isLinked: Bool = false,
-         onSaveToFile: (() -> Bool)? = nil) {
+         onSaveToFile: (() -> Bool)? = nil,
+         initialColor: String? = nil,
+         onColorChange: ((String?) -> Void)? = nil) {
         self.content = content
         self.initialOpacity = initialOpacity
         self.initialPinned = initialPinned
@@ -46,6 +53,8 @@ struct StickyContentView: View {
         self.onContentChange = onContentChange
         self.isLinked = isLinked
         self.onSaveToFile = onSaveToFile
+        self.onColorChange = onColorChange
+        _colorKey = State(initialValue: initialColor)
         _opacity = State(initialValue: initialOpacity)
         _pinned = State(initialValue: initialPinned)
         _displayContent = State(initialValue: content)
@@ -86,6 +95,33 @@ struct StickyContentView: View {
         case nil:      return .secondary
         }
     }
+    // 색상 스와치 하나 — 선택 시 즉시 반영 + 콜백 저장, 팝오버 닫기. key=nil은 "기본".
+    @ViewBuilder
+    private func colorSwatch(key: String?, color: Color?) -> some View {
+        let isSelected = (key == colorKey)
+        Button(action: {
+            colorKey = key
+            onColorChange?(key)
+            showColorPicker = false
+        }) {
+            Circle()
+                .fill(color ?? Color(nsColor: .windowBackgroundColor))
+                .frame(width: 20, height: 20)
+                .overlay {   // 기본(색 없음)은 슬래시로 표시
+                    if color == nil {
+                        Image(systemName: "line.diagonal")
+                            .imageScale(.small).foregroundStyle(.secondary)
+                    }
+                }
+                .overlay {   // 선택 표시 테두리
+                    Circle().strokeBorder(isSelected ? Color.accentColor : Color.secondary.opacity(0.4),
+                                          lineWidth: isSelected ? 2 : 1)
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(StickyPalette(rawValue: key ?? "")?.label ?? "기본")
+    }
+
     private func flashSaveResult(_ ok: Bool) {
         withAnimation { saveFlash = ok ? .success : .failure }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
@@ -95,7 +131,7 @@ struct StickyContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // 상단 크롬바 — 상시 노출(호버 시 진해짐). 좌:핀 / 중앙:그립 / 우:닫기
+            // 상단 크롬바 — 상시 노출(호버 시 진해짐). 좌:핀 / 중앙:투명도 / 우:편집·저장·닫기
             HStack(spacing: 8) {
                 Button(action: { pinned.toggle(); onTogglePin(pinned) }) {
                     Image(systemName: pinned ? "pin.fill" : "pin")
@@ -105,10 +141,35 @@ struct StickyContentView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(pinned ? "핀 해제" : "핀 고정")
 
-                Spacer(minLength: 0)
-                Image(systemName: "line.3.horizontal")          // ⋯ 드래그 그립 어포던스
-                    .imageScale(.small).foregroundStyle(.secondary.opacity(0.5))
-                Spacer(minLength: 0)
+                // 색상 — 스와치 팝오버 (포스트잇 프리셋)
+                if onColorChange != nil {
+                    Button(action: { showColorPicker.toggle() }) {
+                        Image(systemName: "paintpalette")
+                            .imageScale(.medium)
+                            .foregroundStyle(StickyPalette.color(forKey: colorKey) != nil ? .primary : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("색상")
+                    .popover(isPresented: $showColorPicker, arrowEdge: .bottom) {
+                        HStack(spacing: 8) {
+                            colorSwatch(key: nil, color: nil)   // 기본
+                            ForEach(StickyPalette.allCases) { colorSwatch(key: $0.rawValue, color: $0.color) }
+                        }
+                        .padding(10)
+                    }
+                }
+
+                Spacer(minLength: 4)
+                // 투명도 — 우측 버튼 앞, 좁게 고정 (하단 바에서 상단으로 이동). 지배적이지 않게 폭 제한.
+                Image(systemName: "circle.lefthalf.filled")
+                    .imageScale(.small).foregroundStyle(.secondary)
+                Slider(value: $opacity, in: 0.3...1.0) { editing in
+                    if !editing { onOpacityCommit(opacity) }
+                }
+                .onChange(of: opacity) { _, v in onOpacityChange(v) }
+                .controlSize(.mini)
+                .frame(width: 70)
+                .accessibilityLabel("투명도")
 
                 // 편집 버튼 — 편집 가능 스티커(onContentChange != nil). 더블클릭 대안 진입점 (스펙 §3.2.1)
                 if onContentChange != nil, !isEditing {
@@ -168,21 +229,12 @@ struct StickyContentView: View {
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2, perform: beginEdit)   // 더블클릭 → 편집 (스펙 §3.2.1)
             }
-
-            // 하단 투명도 — 상시(얇게)
-            HStack(spacing: 6) {
-                Image(systemName: "circle.lefthalf.filled")
-                    .imageScale(.small).foregroundStyle(.secondary)
-                Slider(value: $opacity, in: 0.3...1.0) { editing in
-                    if !editing { onOpacityCommit(opacity) }
-                }
-                .onChange(of: opacity) { _, v in onOpacityChange(v) }
-            }
-            .padding(.horizontal, 10).padding(.vertical, 4)
-            .background(.thinMaterial.opacity(hovering ? 1.0 : 0.4))
         }
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .windowBackgroundColor)))
+        .background(RoundedRectangle(cornerRadius: 10)
+            .fill(StickyPalette.color(forKey: colorKey) ?? Color(nsColor: .windowBackgroundColor)))
         .clipShape(RoundedRectangle(cornerRadius: 10))
+        // 색상(밝은 파스텔)이 있으면 light 외형 강제 → 글자 검정 + 크롬 밝게 일관. 기본은 시스템 외형 유지.
+        .environment(\.colorScheme, colorKey != nil ? .light : systemColorScheme)
         .animation(.easeInOut(duration: 0.15), value: hovering)
         .onHover { hovering = $0 }
     }

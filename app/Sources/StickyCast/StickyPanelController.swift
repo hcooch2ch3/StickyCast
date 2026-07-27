@@ -64,7 +64,12 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
             onSaveToFile: isLinked ? { [weak self] in
                 guard let self else { return false }
                 return onSaveToFile(self.noteID)
-            } : nil
+            } : nil,
+            initialColor: note.color,
+            onColorChange: { [weak self] key in
+                guard let self else { return }
+                self.store.setColor(id: self.noteID, color: key)
+            }
         ))
         // 복원/생성 시 저장된 핀 상태를 창 레벨에 반영 (dual-review iter-003: 복원 시 applyPinned 필수)
         panel.applyPinned(note.pinned == true)
