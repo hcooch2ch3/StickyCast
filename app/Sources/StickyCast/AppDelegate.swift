@@ -1,5 +1,6 @@
 import AppKit
 import UserNotifications
+import UniformTypeIdentifiers
 import StickyCastCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -76,6 +77,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             reportError("스티커가 최대 \(StickyStore.maxStickies)장입니다. 기존 스티커를 닫아 주세요.")
         case .failure(.contentTooLarge):
             reportError("스티커 내용이 너무 큽니다 (최대 약 \(StickyStore.maxContentBytes / (1024 * 1024))MB).")
+        case .failure(.noteNotFound):
+            break   // add는 이 에러를 반환하지 않음 (스위치 망라용 방어)
         }
     }
 
@@ -93,9 +96,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func addController(for note: StickyNote) {
-        let controller = StickyPanelController(note: note, store: store) { [weak self] id in
-            self?.controllers[id] = nil
-        }
+        let controller = StickyPanelController(
+            note: note, store: store,
+            onClosed: { [weak self] id in self?.controllers[id] = nil },
+            onSaveToFile: { [weak self] id in self?.saveNoteToSourceFile(id: id) ?? false },
+            onError: { [weak self] message in self?.reportError(message) }
+        )
         controllers[note.id] = controller
         controller.show()
     }
@@ -104,6 +110,139 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func hideAllStickers() { controllers.values.forEach { $0.hide() } }
     /// 감춘 스티커를 모두 다시 앞으로 띄운다.
     func showAllStickers() { controllers.values.forEach { $0.show() } }
+
+    // MARK: 편의 기능 Phase 1 — 클립보드 · 파일 열기 · 내보내기 (스펙 §3.1/§3.4)
+
+    /// 클립보드 텍스트로 독립 스티커 생성. 메뉴바 "클립보드에서 스티커".
+    func createStickyFromClipboard() {
+        guard let raw = NSPasteboard.general.string(forType: .string),
+              !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            reportError("클립보드에 붙여넣을 텍스트가 없습니다.")
+            return
+        }
+        createSticky(content: raw)   // 콘텐츠 바이트 캡은 store.add()가 강제 (단일 소스)
+    }
+
+    /// NSOpenPanel로 .md 선택 → 내용을 스티커로. 링크 메타(sourcePath/bookmark)를 저장하되
+    /// Phase 1은 스티커를 독립(편집 가능)으로 둔다 (스펙 §4.1.1). 읽기전용·Live Sync는 Phase 2.
+    func openMarkdownFile() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        // .md / .markdown / 일반 텍스트 허용 (.txt는 마크다운 여부 불명확이나 텍스트로 열람 허용)
+        var types: [UTType] = [.plainText]
+        if let markdown = UTType(filenameExtension: "markdown") { types.insert(markdown, at: 0) }
+        if let md = UTType(filenameExtension: "md") { types.insert(md, at: 0) }
+        panel.allowedContentTypes = types
+        NSApp.activate()   // accessory(LSUIElement) 앱 — 패널을 앞으로 가져온다
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        openFile(at: url)
+    }
+
+    private func openFile(at url: URL) {
+        let content: String
+        do {
+            content = try String(contentsOf: url, encoding: .utf8)
+        } catch {
+            reportError("파일을 읽을 수 없습니다 (\(url.lastPathComponent)). UTF-8 텍스트인지 확인해 주세요.")
+            return
+        }
+        // Phase 1: 일반 bookmark 저장(비샌드박스에서 동작). Phase 2가 sandbox 전환 시
+        // security-scoped bookmark(.withSecurityScope)로 승격 + FileWatcher 연결 (스펙 §1.1/§4.3).
+        let bookmark = try? url.bookmarkData()
+        // 원본 mtime 스냅샷 — write-back 시 외부 변경(다른 에디터가 파일 수정) 감지 기준.
+        // save-back과 동일하게 심링크 해소 후 읽어 mtime 기준을 일치시킨다 (심링크면 첫 저장 오탐 방지).
+        let mtime = fileModificationDate(url.resolvingSymlinksInPath())
+        switch store.add(content: content, sourcePath: url.path, sourceBookmark: bookmark, sourceModifiedDate: mtime) {
+        case .success(let note):
+            addController(for: note)
+        case .failure(.capReached):
+            reportError("스티커가 최대 \(StickyStore.maxStickies)장입니다. 기존 스티커를 닫아 주세요.")
+        case .failure(.contentTooLarge):
+            reportError("파일이 너무 큽니다 (최대 약 \(StickyStore.maxContentBytes / (1024 * 1024))MB).")
+        case .failure(.noteNotFound):
+            break   // add는 이 에러를 반환하지 않음 (스위치 망라용 방어)
+        }
+    }
+
+    /// 파일 연결 스티커의 현재 내용을 원본 .md 파일에 수동 반영 (사용자 명시 동작).
+    /// 양방향 자동 동기화(스펙 §2.1이 배제)가 아니라, 버튼 누를 때만 스티커→파일 단방향 기록 =
+    /// 그 순간 단일 writer라 충돌 회피. Live Sync(파일→스티커, Phase 2)와 독립.
+    /// 성공 시 true — 호출부(스티커 버튼)가 즉각 시각 피드백(체크/X)을 주도록. 실패는 reportError로 상세 알림.
+    @discardableResult
+    func saveNoteToSourceFile(id: UUID) -> Bool {
+        guard let note = store.notes.first(where: { $0.id == id }), note.sourcePath != nil else { return false }
+        guard let resolved = resolveSourceURL(note: note) else {
+            reportError("원본 파일을 찾을 수 없습니다. 이동/삭제됐을 수 있습니다.")
+            return false
+        }
+        // 심링크는 실제 대상으로 해소 후 기록 — atomically:true의 rename이 링크를 일반 파일로
+        // 치환해 vault 심링크 구조를 깨는 것을 방지 (리뷰 B Major).
+        let url = resolved.resolvingSymlinksInPath()
+
+        // 충돌 감지: 열었을 때(또는 마지막 저장 시)의 mtime과 현재 파일 mtime이 다르면
+        // 외부 에디터가 파일을 바꾼 것 → 무경고 덮어쓰기(=사용자 작업 소실) 대신 확인 (리뷰 Critical).
+        let currentMtime = fileModificationDate(url)
+        if let baseline = note.sourceModifiedDate, let current = currentMtime, current != baseline {
+            guard confirmOverwrite(fileName: url.lastPathComponent) else { return false }
+        }
+
+        do {
+            try note.content.write(to: url, atomically: true, encoding: .utf8)
+            // 저장 후 새 mtime을 기준으로 갱신 — 다음 저장이 방금 우리 쓰기를 "외부 변경"으로 오판하지 않게.
+            store.setSourceModifiedDate(id: id, date: fileModificationDate(url))
+            return true
+        } catch {
+            reportError("원본 파일에 저장하지 못했습니다 (\(url.lastPathComponent)).")
+            return false
+        }
+    }
+
+    /// 원본이 외부에서 변경됐을 때만 뜨는 덮어쓰기 확인. 사용자가 "덮어쓰기"를 골라야 true.
+    private func confirmOverwrite(fileName: String) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "원본 파일이 외부에서 변경되었습니다"
+        alert.informativeText = "'\(fileName)'을(를) 스티커 내용으로 덮어쓰면 외부 변경분이 사라집니다. 계속할까요?"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "덮어쓰기")
+        alert.addButton(withTitle: "취소")
+        NSApp.activate()
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    /// 파일 mtime. 읽기 실패 시 nil (충돌 감지는 nil이면 건너뛰고 저장 허용 — 감지 못 함 ≠ 차단).
+    private func fileModificationDate(_ url: URL) -> Date? {
+        (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate]) as? Date
+    }
+
+    /// bookmark로 현재 경로를 resolve(파일 이동 추적). 실패 시 sourcePath 문자열로 폴백.
+    /// (stale bookmark 재생성·재저장은 Phase 2 — 현재 일반 bookmark라 영향 낮음.)
+    private func resolveSourceURL(note: StickyNote) -> URL? {
+        if let data = note.sourceBookmark {
+            var stale = false
+            if let url = try? URL(resolvingBookmarkData: data, options: [], relativeTo: nil, bookmarkDataIsStale: &stale) {
+                return url
+            }
+        }
+        if let path = note.sourcePath { return URL(fileURLWithPath: path) }
+        return nil
+    }
+
+    /// 스티커 본문을 .md로 저장. 메뉴바 "스티커 내보내기 ▸ <노트>".
+    func exportNote(id: UUID) {
+        guard let note = store.notes.first(where: { $0.id == id }) else { return }
+        let panel = NSSavePanel()
+        if let md = UTType(filenameExtension: "md") { panel.allowedContentTypes = [md] }
+        panel.nameFieldStringValue = ExportNaming.filename(for: note.content)
+        NSApp.activate()
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try note.content.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            reportError("내보내기에 실패했습니다 (\(url.lastPathComponent)).")
+        }
+    }
 
     /// §7 조용한 실패 금지: 알림 시도 + 메뉴바 최근 오류에 항상 적재 (권한 무관 폴백)
     func reportError(_ message: String) {

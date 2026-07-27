@@ -13,12 +13,16 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
     private var committedOpacity: Double   // 하이라이트 복원 기준 (panel.alphaValue의 transient 값 대신)
     private var isFlashing = false         // 하이라이트 재진입 가드
 
-    init(note: StickyNote, store: StickyStore, onClosed: @escaping (UUID) -> Void) {
+    init(note: StickyNote, store: StickyStore,
+         onClosed: @escaping (UUID) -> Void,
+         onSaveToFile: @escaping (UUID) -> Bool = { _ in false },
+         onError: @escaping (String) -> Void = { _ in }) {
         self.noteID = note.id
         self.store = store
         self.onClosed = onClosed
         self.committedOpacity = note.opacity
         self.panel = StickyPanel(frame: note.frame)
+        let isLinked = note.sourcePath != nil   // 파일 연결 스티커 → "원본에 저장" 버튼 노출
         super.init()
 
         panel.alphaValue = note.opacity
@@ -39,7 +43,28 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
                 self.panel.alphaValue = v
                 self.committedOpacity = v
                 self.store.commitOpacity(id: self.noteID, opacity: v)
-            }
+            },
+            // 인라인 편집 저장 (S1). Phase 1은 모든 스티커 편집 허용 — 읽기전용은 Phase 2.
+            // 성공 여부 반환 — 실패(1MB 초과) 시 뷰가 편집 유지, 여기서 사용자에게 알림 (§7 조용한 실패 금지).
+            onContentChange: { [weak self] newContent in
+                guard let self else { return false }
+                switch self.store.updateContent(id: self.noteID, content: newContent) {
+                case .success:
+                    return true
+                case .failure(.contentTooLarge):
+                    onError("스티커 내용이 너무 큽니다 (최대 약 \(StickyStore.maxContentBytes / (1024 * 1024))MB).")
+                    return false
+                case .failure:
+                    onError("편집 내용을 저장하지 못했습니다.")
+                    return false
+                }
+            },
+            isLinked: isLinked,
+            // 파일 연결 스티커만: 현재 내용을 원본 파일에 수동 반영. 성공 여부를 반환해 버튼이 체크/X 표시.
+            onSaveToFile: isLinked ? { [weak self] in
+                guard let self else { return false }
+                return onSaveToFile(self.noteID)
+            } : nil
         ))
         // 복원/생성 시 저장된 핀 상태를 창 레벨에 반영 (dual-review iter-003: 복원 시 applyPinned 필수)
         panel.applyPinned(note.pinned == true)

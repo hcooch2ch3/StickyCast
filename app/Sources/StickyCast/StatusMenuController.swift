@@ -41,6 +41,11 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
+        // 생성 진입점 (편의 기능 Phase 1) — 목록보다 위에 두어 주요 동작이 먼저 보이게.
+        menu.addItem(makeItem("클립보드에서 스티커", #selector(newFromClipboard)))
+        menu.addItem(makeItem("마크다운 파일 열기…", #selector(openFile)))
+        menu.addItem(.separator())
+
         // 메뉴는 살아있는 컨트롤러가 있는 노트만 나열 — store와 controllers가 어긋나도
         // 클릭이 조용히 무시되는 항목을 만들지 않는다.
         let liveNotes = appDelegate.store.notes.filter { appDelegate.controllers[$0.id] != nil }
@@ -68,6 +73,22 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             }
         }
         menu.addItem(makeItem("모두 앞으로", #selector(bringAllToFront)))
+        // 스티커 내보내기 — 서브메뉴로 노트별 나열 (노트 제목 원클릭=앞으로 동작 보존)
+        if !liveNotes.isEmpty {
+            let exportItem = NSMenuItem(title: "스티커 내보내기", action: nil, keyEquivalent: "")
+            let submenu = NSMenu()
+            for note in liveNotes {
+                let preview = note.content
+                    .split(separator: "\n").first.map(String.init) ?? "(빈 내용)"
+                let sub = NSMenuItem(title: String(preview.prefix(40)),
+                                     action: #selector(exportNote(_:)), keyEquivalent: "")
+                sub.target = self
+                sub.representedObject = note.id
+                submenu.addItem(sub)
+            }
+            exportItem.submenu = submenu
+            menu.addItem(exportItem)
+        }
         menu.addItem(makeItem("모두 닫기", #selector(closeAll)))
         menu.addItem(.separator())
         menu.addItem(makeItem("StickyCast에 관하여", #selector(showAbout)))
@@ -83,6 +104,12 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     @objc private func bringNoteToFront(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? UUID else { return }
         appDelegate.controllers[id]?.bringToFrontHighlighted()  // §5.3 "앞으로 + 강조"
+    }
+    @objc private func newFromClipboard() { appDelegate.createStickyFromClipboard() }
+    @objc private func openFile() { appDelegate.openMarkdownFile() }
+    @objc private func exportNote(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? UUID else { return }
+        appDelegate.exportNote(id: id)
     }
     @objc private func bringAllToFront() {
         appDelegate.controllers.values.forEach { $0.bringToFront() }
