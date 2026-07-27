@@ -28,6 +28,7 @@ public struct StickyNote: Codable, Identifiable, Equatable {
     public var sourcePath: String? = nil       // 연결된 파일 경로
     public var sourceBookmark: Data? = nil     // 파일 이동 추적용 security-scoped bookmark (Phase 2)
     public var sourceModifiedDate: Date? = nil // 원본 파일 mtime 스냅샷 — write-back 충돌 감지 기준 (외부 변경 시 경고)
+    public var color: String? = nil            // 포스트잇 색상 팔레트 키 (nil=기본). 색 Color 매핑은 앱 측 StickyPalette.
 }
 
 /// 스티커 상태의 단일 진실 소스. AppKit 창 코드와 무관 — 단위 테스트 대상.
@@ -129,6 +130,13 @@ public final class StickyStore {
     public func commitOpacity(id: UUID, opacity: Double) {
         guard let i = notes.firstIndex(where: { $0.id == id }) else { return }
         notes[i].opacity = opacity
+        save()
+    }
+
+    /// 포스트잇 색상 팔레트 키 저장 (nil=기본). id 미존재 시 no-op (기존 setter 관례).
+    public func setColor(id: UUID, color: String?) {
+        guard let i = notes.firstIndex(where: { $0.id == id }) else { return }
+        notes[i].color = color
         save()
     }
 

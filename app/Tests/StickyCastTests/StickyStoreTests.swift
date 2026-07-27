@@ -344,6 +344,26 @@ final class StickyStoreTests: XCTestCase {
         } else { XCTFail("한도 초과는 .contentTooLarge") }
     }
 
+    func testSetColorPersistsRoundTrip() {
+        // 포스트잇 색상 — 팔레트 키를 저장하고 왕복 생존. 기본은 nil.
+        let store = makeStore()
+        let note = try! store.add(content: "색").get()
+        XCTAssertNil(store.notes[0].color)     // 기본 = 색 없음
+        store.setColor(id: note.id, color: "yellow")
+        let store2 = makeStore()
+        store2.restore()
+        XCTAssertEqual(store2.notes.count, 1)
+        XCTAssertEqual(store2.notes[0].color, "yellow")
+    }
+
+    func testSetColorNilClearsColor() {
+        let store = makeStore()
+        let note = try! store.add(content: "색").get()
+        store.setColor(id: note.id, color: "pink")
+        store.setColor(id: note.id, color: nil)   // 기본으로 되돌림
+        XCTAssertNil(store.notes[0].color)
+    }
+
     func testSetPinnedPersistsRoundTrip() {
         let store = makeStore()
         let note = try! store.add(content: "핀").get()
