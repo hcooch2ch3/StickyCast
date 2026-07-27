@@ -238,6 +238,112 @@ final class StickyStoreTests: XCTestCase {
         XCTAssertNil(n.pinned)
     }
 
+    // MARK: 인라인 편집 (updateContent, 스펙 §4.2.1)
+
+    func testUpdateContentChangesAndPersists() {
+        let store = makeStore()
+        let note = try! store.add(content: "원본").get()
+        if case .failure = store.updateContent(id: note.id, content: "수정됨") { XCTFail("정상 업데이트 실패") }
+        XCTAssertEqual(store.notes[0].content, "수정됨")
+        let store2 = makeStore()
+        store2.restore()
+        XCTAssertEqual(store2.notes[0].content, "수정됨")
+    }
+
+    func testUpdateContentRejectsOversize() {
+        let store = makeStore()
+        let note = try! store.add(content: "작음").get()
+        let over = String(repeating: "a", count: StickyStore.maxContentBytes + 1)
+        if case .failure(let e) = store.updateContent(id: note.id, content: over) {
+            XCTAssertEqual(e, .contentTooLarge)
+        } else { XCTFail("한도 초과는 .contentTooLarge") }
+        XCTAssertEqual(store.notes[0].content, "작음")   // 원본 불변
+    }
+
+    func testUpdateContentUnknownIdReturnsNotFound() {
+        // 기존 mutator는 no-op이지만 updateContent는 편집 저장 실패를 알려야 하므로 에러 (§4.2.1)
+        let store = makeStore()
+        if case .failure(let e) = store.updateContent(id: UUID(), content: "x") {
+            XCTAssertEqual(e, .noteNotFound)
+        } else { XCTFail("미존재 id는 .noteNotFound") }
+    }
+
+    // MARK: 파일 연동 필드 (편의 기능 Phase 1 — 가져오기 + 링크 저장)
+
+    func testAddWithSourcePathStoresAndRoundTrips() {
+        // 파일 열기로 생성 시 sourcePath/sourceBookmark를 저장하고 왕복 생존
+        let store = makeStore()
+        let bookmark = Data([0x01, 0x02, 0x03])
+        let note = try! store.add(content: "# 파일 내용",
+                                  sourcePath: "/tmp/example.md",
+                                  sourceBookmark: bookmark).get()
+        XCTAssertEqual(note.sourcePath, "/tmp/example.md")
+        XCTAssertEqual(note.sourceBookmark, bookmark)
+
+        let store2 = makeStore()
+        store2.restore()
+        XCTAssertEqual(store2.notes.count, 1)
+        XCTAssertEqual(store2.notes[0].sourcePath, "/tmp/example.md")
+        XCTAssertEqual(store2.notes[0].sourceBookmark, bookmark)
+    }
+
+    func testAddStoresSourceModifiedDate() {
+        // 파일 열기 시 원본 mtime 저장 → write-back 충돌 감지 기준 (round-trip 생존)
+        let store = makeStore()
+        let mtime = Date(timeIntervalSince1970: 1_700_000_000)
+        let note = try! store.add(content: "x", sourcePath: "/tmp/a.md",
+                                  sourceBookmark: nil, sourceModifiedDate: mtime).get()
+        XCTAssertEqual(note.sourceModifiedDate, mtime)
+        let store2 = makeStore()
+        store2.restore()
+        XCTAssertEqual(store2.notes[0].sourceModifiedDate, mtime)
+    }
+
+    func testSetSourceModifiedDatePersists() {
+        // 성공 저장 후 mtime 갱신 → 다음 저장의 충돌 기준을 최신화
+        let store = makeStore()
+        let note = try! store.add(content: "x", sourcePath: "/tmp/a.md", sourceBookmark: nil).get()
+        XCTAssertNil(note.sourceModifiedDate)
+        let newMtime = Date(timeIntervalSince1970: 1_700_000_500)
+        store.setSourceModifiedDate(id: note.id, date: newMtime)
+        let store2 = makeStore()
+        store2.restore()
+        XCTAssertEqual(store2.notes[0].sourceModifiedDate, newMtime)
+    }
+
+    func testAddWithoutSourceHasNilFields() {
+        // 기존 경로(클립보드/URL)로 만든 독립 스티커는 source 필드가 nil
+        let store = makeStore()
+        let note = try! store.add(content: "독립").get()
+        XCTAssertNil(note.sourcePath)
+        XCTAssertNil(note.sourceBookmark)
+    }
+
+    func testMigrationV1NoteWithoutSourceFieldsSurvives() {
+        // source 필드가 없던 저장본이 새 구조로 디코드될 때 nil로 채워져 생존 (schemaVersion 1 유지)
+        let v1 = """
+        {"schemaVersion":1,"notes":[
+          {"id":"11111111-1111-1111-1111-111111111111","content":"레거시",
+           "frame":[[10,20],[300,200]],"opacity":0.8,"createdAt":0}
+        ]}
+        """
+        defaults.set(v1.data(using: .utf8), forKey: "stickyStore.v1")
+        let store = makeStore()
+        store.restore()
+        XCTAssertEqual(store.notes.count, 1)
+        XCTAssertNil(store.notes[0].sourcePath)
+        XCTAssertNil(store.notes[0].sourceBookmark)
+    }
+
+    func testAddWithSourceStillEnforcesOversize() {
+        // 링크 저장 경로도 콘텐츠 바이트 캡을 그대로 강제
+        let store = makeStore()
+        let over = String(repeating: "a", count: StickyStore.maxContentBytes + 1)
+        if case .failure(let e) = store.add(content: over, sourcePath: "/tmp/big.md", sourceBookmark: nil) {
+            XCTAssertEqual(e, .contentTooLarge)
+        } else { XCTFail("한도 초과는 .contentTooLarge") }
+    }
+
     func testSetPinnedPersistsRoundTrip() {
         let store = makeStore()
         let note = try! store.add(content: "핀").get()

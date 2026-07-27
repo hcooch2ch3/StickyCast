@@ -4,6 +4,7 @@ import CoreGraphics
 public enum StickyStoreError: Error, Equatable {
     case capReached          // 스티커 장수(maxStickies) 초과
     case contentTooLarge     // 콘텐츠 바이트(maxContentBytes) 초과
+    case noteNotFound        // updateContent: 편집 대상 id 미존재 (조용한 실패 금지 — §4.2.1)
 }
 
 /// restore() 결과 요약. 드롭 건수를 호출부(AppDelegate)가 사용자에게 알리도록 노출 —
@@ -22,6 +23,11 @@ public struct StickyNote: Codable, Identifiable, Equatable {
     public var opacity: Double
     public let createdAt: Date
     public var pinned: Bool? = nil   // 항상-위(.floating) 여부. nil=비고정. 옵셔널이라 누락 키를 synthesized 디코더가 nil로 채워 v1 노트가 생존한다.
+    // 파일 연동(편의 기능). nil = 독립 스티커. 옵셔널이라 누락 키를 synthesized 디코더가 nil로 채워 기존 노트가 생존한다 (schemaVersion 1 유지, 스펙 §4.1.1).
+    // Phase 1은 값만 저장하고 스티커는 편집 가능(독립)으로 둔다. Live Sync·읽기전용은 Phase 2가 이 필드를 승격.
+    public var sourcePath: String? = nil       // 연결된 파일 경로
+    public var sourceBookmark: Data? = nil     // 파일 이동 추적용 security-scoped bookmark (Phase 2)
+    public var sourceModifiedDate: Date? = nil // 원본 파일 mtime 스냅샷 — write-back 충돌 감지 기준 (외부 변경 시 경고)
 }
 
 /// 스티커 상태의 단일 진실 소스. AppKit 창 코드와 무관 — 단위 테스트 대상.
@@ -66,16 +72,47 @@ public final class StickyStore {
     }
 
     public func add(content: String) -> Result<StickyNote, StickyStoreError> {
+        add(content: content, sourcePath: nil, sourceBookmark: nil)
+    }
+
+    /// 파일 연동용 생성: 링크 메타(sourcePath/sourceBookmark)를 함께 저장한다.
+    /// Phase 1은 값만 저장하고 스티커는 독립(편집 가능)으로 둔다 (스펙 §4.1.1).
+    /// 콘텐츠 바이트 캡·장수 캡은 기존 add와 동일하게 강제한다.
+    public func add(content: String, sourcePath: String?, sourceBookmark: Data?,
+                    sourceModifiedDate: Date? = nil) -> Result<StickyNote, StickyStoreError> {
         guard content.utf8.count <= Self.maxContentBytes else { return .failure(.contentTooLarge) }
         guard notes.count < Self.maxStickies else { return .failure(.capReached) }
         let note = StickyNote(
             id: UUID(), content: content,
             frame: nextFrame(index: notes.count),
-            opacity: 1.0, createdAt: Date()
+            opacity: 1.0, createdAt: Date(),
+            sourcePath: sourcePath, sourceBookmark: sourceBookmark,
+            sourceModifiedDate: sourceModifiedDate
         )
         notes.append(note)
         save()
         return .success(note)
+    }
+
+    /// write-back 성공 후 원본 mtime을 갱신 — 다음 저장의 충돌 감지 기준을 최신화. id 미존재 시 no-op.
+    public func setSourceModifiedDate(id: UUID, date: Date?) {
+        guard let i = notes.firstIndex(where: { $0.id == id }) else { return }
+        notes[i].sourceModifiedDate = date
+        save()
+    }
+
+    /// 독립 스티커 콘텐츠 인라인 편집 (스펙 §4.2.1).
+    /// - 검증: `maxContentBytes` 초과 시 `.contentTooLarge`
+    /// - id 미존재: `.noteNotFound` (기존 commit* 계열의 no-op과 달리 저장 실패를 알린다)
+    /// - 스레드: 메인 스레드 전용 (store 계약)
+    /// Phase 1은 sourcePath 유무와 무관하게 편집 허용 — 읽기전용·연결해제 전환은 Phase 2.
+    @discardableResult
+    public func updateContent(id: UUID, content: String) -> Result<Void, StickyStoreError> {
+        guard content.utf8.count <= Self.maxContentBytes else { return .failure(.contentTooLarge) }
+        guard let i = notes.firstIndex(where: { $0.id == id }) else { return .failure(.noteNotFound) }
+        notes[i].content = content
+        save()
+        return .success(())
     }
 
     public func remove(id: UUID) {
