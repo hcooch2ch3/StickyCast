@@ -238,6 +238,24 @@ final class StickyStoreTests: XCTestCase {
         XCTAssertNil(n.pinned)
     }
 
+    // MARK: Live Sync — syncedHash 필드
+
+    func testSyncedHashDefaultsNilAndMigrates() {
+        // 신규 노트 기본 nil + 기존 저장본(필드 없음) 디코드 시 nil 생존
+        let store = makeStore()
+        let n = try! store.add(content: "x").get()
+        XCTAssertNil(n.syncedHash)
+        let v1 = """
+        {"schemaVersion":1,"notes":[
+          {"id":"11111111-1111-1111-1111-111111111111","content":"레거시",
+           "frame":[[0,0],[100,100]],"opacity":1,"createdAt":0}
+        ]}
+        """
+        defaults.set(v1.data(using: .utf8), forKey: "stickyStore.v1")
+        let s2 = makeStore(); s2.restore()
+        XCTAssertNil(s2.notes[0].syncedHash)
+    }
+
     // MARK: 인라인 편집 (updateContent, 스펙 §4.2.1)
 
     func testUpdateContentChangesAndPersists() {

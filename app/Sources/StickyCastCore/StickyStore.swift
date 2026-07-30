@@ -29,6 +29,7 @@ public struct StickyNote: Codable, Identifiable, Equatable {
     public var sourceBookmark: Data? = nil     // 파일 이동 추적용 security-scoped bookmark (Phase 2)
     public var sourceModifiedDate: Date? = nil // 원본 파일 mtime 스냅샷 — write-back 충돌 감지 기준 (외부 변경 시 경고)
     public var color: String? = nil            // 포스트잇 색상 팔레트 키 (nil=기본). 색 Color 매핑은 앱 측 StickyPalette.
+    public var syncedHash: String? = nil       // 마지막 동기 시점 콘텐츠 SHA-256 hex (nil=미연결/미시드). Live Sync 기준선.
 }
 
 /// 스티커 상태의 단일 진실 소스. AppKit 창 코드와 무관 — 단위 테스트 대상.
