@@ -256,6 +256,67 @@ final class StickyStoreTests: XCTestCase {
         XCTAssertNil(s2.notes[0].syncedHash)
     }
 
+    // MARK: Live Sync — 스토어 메서드 (Task 3)
+
+    func testDetachFromFileClearsAllLinkMeta() {
+        let store = makeStore()
+        let n = try! store.add(content: "c", sourcePath: "/tmp/a.md", sourceBookmark: Data([1])).get()
+        store.setSyncedHash(id: n.id, hash: "deadbeef")
+        store.detachFromFile(id: n.id)
+        let m = store.notes[0]
+        XCTAssertNil(m.sourcePath); XCTAssertNil(m.sourceBookmark)
+        XCTAssertNil(m.sourceModifiedDate); XCTAssertNil(m.syncedHash)
+        XCTAssertEqual(m.content, "c")   // 내용 보존
+    }
+    func testApplyFileSyncUpdatesContentAndHash() {
+        let store = makeStore()
+        let n = try! store.add(content: "old", sourcePath: "/tmp/a.md", sourceBookmark: nil).get()
+        let r = store.applyFileSync(id: n.id, content: "new", hash: "abc")
+        if case .failure = r { XCTFail("정상 반영 실패") }
+        XCTAssertEqual(store.notes[0].content, "new")
+        XCTAssertEqual(store.notes[0].syncedHash, "abc")
+    }
+    func testApplyFileSyncRejectsOversize() {
+        let store = makeStore()
+        let n = try! store.add(content: "ok", sourcePath: "/tmp/a.md", sourceBookmark: nil).get()
+        store.setSyncedHash(id: n.id, hash: "seed")
+        let big = String(repeating: "a", count: StickyStore.maxContentBytes + 1)
+        if case .failure(let e) = store.applyFileSync(id: n.id, content: big, hash: "x") {
+            XCTAssertEqual(e, .contentTooLarge)
+        } else { XCTFail(".contentTooLarge 기대") }
+        XCTAssertEqual(store.notes[0].content, "ok")       // 미반영
+        XCTAssertEqual(store.notes[0].syncedHash, "seed")  // 해시 불변
+    }
+    func testSetSourcePathUpdatesPathAndBookmark() {
+        let store = makeStore()
+        let n = try! store.add(content: "c", sourcePath: "/tmp/old.md", sourceBookmark: nil).get()
+        store.setSourcePath(id: n.id, path: "/tmp/new.md", bookmark: Data([9]))
+        XCTAssertEqual(store.notes[0].sourcePath, "/tmp/new.md")
+        XCTAssertEqual(store.notes[0].sourceBookmark, Data([9]))
+    }
+    func testApplyFileSyncAtExactCapSucceeds() {
+        // 리뷰 합치: `<=` 경계 — 정확히 한도면 반영돼야(우발적 `<` 회귀 가드)
+        let store = makeStore()
+        let n = try! store.add(content: "seed", sourcePath: "/tmp/a.md", sourceBookmark: nil).get()
+        let atCap = String(repeating: "a", count: StickyStore.maxContentBytes)
+        if case .failure = store.applyFileSync(id: n.id, content: atCap, hash: "h") {
+            XCTFail("정확히 한도는 반영돼야")
+        }
+        XCTAssertEqual(store.notes[0].content.utf8.count, StickyStore.maxContentBytes)
+        XCTAssertEqual(store.notes[0].syncedHash, "h")
+    }
+    func testDetachFromFilePersistsRoundTrip() {
+        // 리뷰 합치: detach가 save()를 타 재복원 후에도 연결 해제·내용 보존
+        let store = makeStore()
+        let n = try! store.add(content: "keep", sourcePath: "/tmp/a.md", sourceBookmark: Data([1])).get()
+        store.setSyncedHash(id: n.id, hash: "h")
+        store.detachFromFile(id: n.id)
+        let store2 = makeStore(); store2.restore()
+        XCTAssertNil(store2.notes[0].sourcePath)
+        XCTAssertNil(store2.notes[0].syncedHash)
+        XCTAssertEqual(store2.notes[0].content, "keep")
+    }
+
     // MARK: 인라인 편집 (updateContent, 스펙 §4.2.1)
 
     func testUpdateContentChangesAndPersists() {

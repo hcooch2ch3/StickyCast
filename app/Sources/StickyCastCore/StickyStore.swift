@@ -134,6 +134,42 @@ public final class StickyStore {
         save()
     }
 
+    /// 연결 메타 전부 제거 → 독립 스티커로. 내용은 보존. (연결 해제)
+    public func detachFromFile(id: UUID) {
+        guard let i = notes.firstIndex(where: { $0.id == id }) else { return }
+        notes[i].sourcePath = nil
+        notes[i].sourceBookmark = nil
+        notes[i].sourceModifiedDate = nil
+        notes[i].syncedHash = nil
+        save()
+    }
+
+    /// 동기 기준선 갱신 (⬆️ 저장/수렴/시딩 후). id 미존재 시 no-op.
+    public func setSyncedHash(id: UUID, hash: String?) {
+        guard let i = notes.firstIndex(where: { $0.id == id }) else { return }
+        notes[i].syncedHash = hash
+        save()
+    }
+
+    /// 이동 추적 시 경로·refresh bookmark 갱신. id 미존재 시 no-op.
+    public func setSourcePath(id: UUID, path: String, bookmark: Data?) {
+        guard let i = notes.firstIndex(where: { $0.id == id }) else { return }
+        notes[i].sourcePath = path
+        notes[i].sourceBookmark = bookmark
+        save()
+    }
+
+    /// Live Sync 반영(내용+해시 원자적). maxContentBytes 초과 시 .contentTooLarge, 미반영(해시 불변).
+    @discardableResult
+    public func applyFileSync(id: UUID, content: String, hash: String) -> Result<Void, StickyStoreError> {
+        guard content.utf8.count <= Self.maxContentBytes else { return .failure(.contentTooLarge) }
+        guard let i = notes.firstIndex(where: { $0.id == id }) else { return .failure(.noteNotFound) }
+        notes[i].content = content
+        notes[i].syncedHash = hash
+        save()
+        return .success(())
+    }
+
     /// 포스트잇 색상 팔레트 키 저장 (nil=기본). id 미존재 시 no-op (기존 setter 관례).
     public func setColor(id: UUID, color: String?) {
         guard let i = notes.firstIndex(where: { $0.id == id }) else { return }
