@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusMenu: StatusMenuController!
     let fileWatcher = FileWatcher()               // Live Sync — 연결 스티커 파일 감시 (§4)
     private var suppressedNotes: Set<UUID> = []   // ⬆️ 저장 직후 self-write 억제 (§3.2, Task 11)
+    private let readGen = ReadGeneration()        // 파일 읽기 out-of-order 완료 폐기 — latest-wins (Finding #2)
 
     // "모두 숨기기/보이기" 토글 라벨은 별도 상태 bool이 아니라 실제 창 가시성에서 파생한다
     // (dual-review iter-006: 전역 bool은 per-window 상태와 어긋나 라벨이 거짓말함).
@@ -137,8 +138,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             store.setSourcePath(id: noteID, path: url.path, bookmark: try? url.bookmarkData())
             fileWatcher.watch(noteID: noteID, url: url) { [weak self] in self?.handleFileEvent(noteID: noteID) }
         }
+        let gen = readGen.begin(noteID)   // 이 읽기의 세대 토큰 — 완료 시 최신인지 검사(Finding #2)
         readLinkedFile(url) { [weak self] result in
-            guard let self, let result else { return }   // 읽기/decode 실패 → no-op(자동반영 금지, M2)
+            guard let self else { return }
+            guard self.readGen.isCurrent(noteID, gen) else { return }   // 더 최신 읽기가 뒤이어 시작됨 → 폐기(stale 고착 방지)
+            guard let result else { return }   // 읽기/decode 실패 → no-op(자동반영 금지, M2)
             guard let note = self.store.notes.first(where: { $0.id == noteID }) else { return }
             let stickerHash = ContentHash.sha256Hex(note.content)
             switch decideSyncAction(stickerHash: stickerHash, fileHash: result.hash,
