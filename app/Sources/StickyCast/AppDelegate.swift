@@ -276,10 +276,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Phase 1: 일반 bookmark 저장(비샌드박스에서 동작). Phase 2가 sandbox 전환 시
         // security-scoped bookmark(.withSecurityScope)로 승격 + FileWatcher 연결 (스펙 §1.1/§4.3).
         let bookmark = try? url.bookmarkData()
-        // 원본 mtime 스냅샷 — write-back 시 외부 변경(다른 에디터가 파일 수정) 감지 기준.
-        // save-back과 동일하게 심링크 해소 후 읽어 mtime 기준을 일치시킨다 (심링크면 첫 저장 오탐 방지).
-        let mtime = fileModificationDate(url.resolvingSymlinksInPath())
-        switch store.add(content: content, sourcePath: url.path, sourceBookmark: bookmark, sourceModifiedDate: mtime) {
+        switch store.add(content: content, sourcePath: url.path, sourceBookmark: bookmark) {
         case .success(let note):
             // open 시점 syncedHash 시딩(§8.1 세 시점 중 ①) — watch arm 전에 기준선 확보.
             // 없으면 첫 외부 변경에 헛 배너 + ⬆️ 오판(회귀).
@@ -309,17 +306,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 치환해 vault 심링크 구조를 깨는 것을 방지 (리뷰 B Major).
         let url = resolved.resolvingSymlinksInPath()
 
-        // 충돌 감지: 열었을 때(또는 마지막 저장 시)의 mtime과 현재 파일 mtime이 다르면
-        // 외부 에디터가 파일을 바꾼 것 → 무경고 덮어쓰기(=사용자 작업 소실) 대신 확인 (리뷰 Critical).
-        let currentMtime = fileModificationDate(url)
-        if let baseline = note.sourceModifiedDate, let current = currentMtime, current != baseline {
+        // 충돌 감지(해시 기반, §3.2): 현재 파일 내용 해시 != syncedHash면 외부 변경 → 확인 다이얼로그.
+        // syncedHash==nil(미시드)이면 감지 건너뜀(Phase 1 mtime nil 가드와 동형 — 없으면 첫 ⬆️ 헛 다이얼로그 회귀).
+        if let baseline = note.syncedHash,
+           let fileContent = try? String(contentsOf: url, encoding: .utf8),
+           ContentHash.sha256Hex(fileContent) != baseline {
             guard confirmOverwrite(fileName: url.lastPathComponent) else { return false }
         }
 
         do {
             try note.content.write(to: url, atomically: true, encoding: .utf8)
-            // 저장 후 새 mtime을 기준으로 갱신 — 다음 저장이 방금 우리 쓰기를 "외부 변경"으로 오판하지 않게.
-            store.setSourceModifiedDate(id: id, date: fileModificationDate(url))
+            // 순서 보장(§3.2): 기록 직후 syncedHash 동기 갱신 → 도착하는 watcher 콜백이 F=false로 무시.
+            store.setSyncedHash(id: id, hash: ContentHash.sha256Hex(note.content))
+            // self-write 억제 창(§3.2, 2차 방어): 재-arm 창에 타이핑해도 헛 배너 방지.
+            suppressedNotes.insert(id)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.suppressedNotes.remove(id) }
             return true
         } catch {
             reportError("원본 파일에 저장하지 못했습니다 (\(url.lastPathComponent)).")
@@ -337,11 +338,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.addButton(withTitle: "취소")
         NSApp.activate()
         return alert.runModal() == .alertFirstButtonReturn
-    }
-
-    /// 파일 mtime. 읽기 실패 시 nil (충돌 감지는 nil이면 건너뛰고 저장 허용 — 감지 못 함 ≠ 차단).
-    private func fileModificationDate(_ url: URL) -> Date? {
-        (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate]) as? Date
     }
 
     /// bookmark로 현재 경로를 resolve(파일 이동 추적). 실패 시 sourcePath 문자열로 폴백.
