@@ -122,12 +122,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// FileWatcher 이벤트 → off-main 읽기 → (dirty,file) 판정 → vm 갱신 (§3).
+    /// FileWatcher 이벤트 → off-main 읽기 → (dirty,file) 판정 → vm 갱신 (§3). 삭제/이동도 처리(§7).
     private func handleFileEvent(noteID: UUID) {
         if suppressedNotes.contains(noteID) { return }   // ⬆️ self-write 억제 창(§3.2)
         guard let note = store.notes.first(where: { $0.id == noteID }),
-              let controller = controllers[noteID],
-              let url = resolveSourceURL(note: note) else { return }
+              let controller = controllers[noteID] else { return }
+        // 이동 추적: bookmark로 현재 경로 resolve. 없거나 파일 부재면 삭제 처리(§7, debounce는 FileWatcher가 이미 수행).
+        guard let url = resolveSourceURL(note: note), FileManager.default.fileExists(atPath: url.path) else {
+            handleDeletedFile(noteID: noteID)
+            return
+        }
+        // 경로가 바뀌었으면(동일 볼륨 이동) sourcePath·bookmark 갱신 + watcher 재-arm(§7)
+        if url.path != note.sourcePath {
+            store.setSourcePath(id: noteID, path: url.path, bookmark: try? url.bookmarkData())
+            fileWatcher.watch(noteID: noteID, url: url) { [weak self] in self?.handleFileEvent(noteID: noteID) }
+        }
         readLinkedFile(url) { [weak self] result in
             guard let self, let result else { return }   // 읽기/decode 실패 → no-op(자동반영 금지, M2)
             guard let note = self.store.notes.first(where: { $0.id == noteID }) else { return }
@@ -152,6 +161,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .conflict:
                 controller.vm.syncBanner = .conflict
             }
+        }
+    }
+
+    /// 연결 파일 삭제(debounce·resolve 후에도 부재) → "유지(독립 전환)/닫기" 다이얼로그 (§7).
+    private func handleDeletedFile(noteID: UUID) {
+        guard let note = store.notes.first(where: { $0.id == noteID }) else { return }
+        let name = (note.sourcePath as NSString?)?.lastPathComponent ?? "파일"
+        let alert = NSAlert()
+        alert.messageText = "연결된 파일을 찾을 수 없습니다"
+        alert.informativeText = "'\(name)'이(가) 삭제/이동됐습니다. 스티커를 어떻게 할까요? (현재 내용은 보존됩니다)"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "유지 (독립 전환)")
+        alert.addButton(withTitle: "닫기")
+        NSApp.activate()
+        if alert.runModal() == .alertFirstButtonReturn {
+            detachNote(id: noteID)          // 유지 → 독립 전환(내용 보존)
+        } else {
+            controllers[noteID]?.close()    // 닫기 → 제거 (close가 unwatch 경유)
         }
     }
 
