@@ -6,6 +6,7 @@ import StickyCastCore
 /// 스레드 계약: 메인 스레드 전용 (StickyStore와 동일 — UI 콜백/URL 핸들러 전부 메인).
 final class StickyPanelController: NSObject, NSWindowDelegate {
     let noteID: UUID
+    let vm: StickyViewModel                 // 반응형 뷰 상태 — Live Sync가 갱신(§4.5)
     private let panel: StickyPanel
     private let store: StickyStore
     private let onClosed: (UUID) -> Void
@@ -22,13 +23,14 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
         self.onClosed = onClosed
         self.committedOpacity = note.opacity
         self.panel = StickyPanel(frame: note.frame)
+        self.vm = StickyViewModel(content: note.content)
         let isLinked = note.sourcePath != nil   // 파일 연결 스티커 → "원본에 저장" 버튼 노출
         super.init()
 
         panel.alphaValue = note.opacity
         panel.delegate = self
         panel.contentView = NSHostingView(rootView: StickyContentView(
-            content: note.content,
+            vm: vm,
             initialOpacity: note.opacity,
             initialPinned: note.pinned == true,
             onClose: { [weak self] in self?.close() },

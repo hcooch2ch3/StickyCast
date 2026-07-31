@@ -2,7 +2,7 @@ import SwiftUI
 import MarkdownUI
 
 struct StickyContentView: View {
-    let content: String
+    @ObservedObject var vm: StickyViewModel     // 반응형 콘텐츠·배너·편집상태 (§4.5)
     let initialOpacity: Double
     let initialPinned: Bool
     let onClose: () -> Void
@@ -20,10 +20,7 @@ struct StickyContentView: View {
     @State private var pinned: Bool
     // 인라인 편집 (S1 스파이크 — nonactivating 패널에서 TextEditor 키 입력 검증)
     @State private var isEditing = false
-    // 저장 후 읽기 모드 렌더 소스 (let content는 초기값). Phase 1은 패널이 복원 시 새로 생성돼 stale 안 됨.
-    // ⚠️ Phase 2(Live Sync): 파일 변경이 살아있는 노트를 갱신하면 이 init-seed @State가 stale해짐 —
-    // 그땐 observable 소스에서 구동해야 함 (리뷰 Minor 지적, 지금은 latent).
-    @State private var displayContent: String
+    // 읽기 모드 렌더 소스는 vm.content(반응형). Live Sync가 vm.content를 갱신하면 즉시 리렌더(§4.5).
     @State private var draft: String = ""
     @FocusState private var editorFocused: Bool
     // "원본에 저장" 결과 즉각 피드백 — 성공 초록 체크 / 실패 빨강 X, ~1.2s 후 복귀
@@ -33,7 +30,7 @@ struct StickyContentView: View {
     @State private var colorKey: String?
     @State private var showColorPicker = false
 
-    init(content: String, initialOpacity: Double, initialPinned: Bool,
+    init(vm: StickyViewModel, initialOpacity: Double, initialPinned: Bool,
          onClose: @escaping () -> Void,
          onTogglePin: @escaping (Bool) -> Void,
          onOpacityChange: @escaping (Double) -> Void,
@@ -43,7 +40,7 @@ struct StickyContentView: View {
          onSaveToFile: (() -> Bool)? = nil,
          initialColor: String? = nil,
          onColorChange: ((String?) -> Void)? = nil) {
-        self.content = content
+        _vm = ObservedObject(wrappedValue: vm)
         self.initialOpacity = initialOpacity
         self.initialPinned = initialPinned
         self.onClose = onClose
@@ -57,27 +54,29 @@ struct StickyContentView: View {
         _colorKey = State(initialValue: initialColor)
         _opacity = State(initialValue: initialOpacity)
         _pinned = State(initialValue: initialPinned)
-        _displayContent = State(initialValue: content)
     }
 
     private func beginEdit() {
         guard onContentChange != nil else { return }   // 편집 비활성 스티커
-        draft = displayContent
+        draft = vm.content
         isEditing = true
+        vm.setEditing(true)   // Live Sync 판정이 dirty로 취급(§2 미커밋 편집 clobber 방지)
         // TextEditor 마운트 후에 포커스 — 같은 tick에 설정하면 필드가 아직 뷰 트리에 없어
         // @FocusState 쓰기가 no-op 될 수 있음 (리뷰 Major: 첫 진입 포커스 실패 방지).
         DispatchQueue.main.async { editorFocused = true }
     }
     private func commitEdit() {
-        // 저장 실패(예: 1MB 초과)면 편집 모드 유지 + displayContent 갱신 안 함 (컨트롤러가 오류 알림).
+        // 저장 실패(예: 1MB 초과)면 편집 모드 유지 + vm.content 갱신 안 함 (컨트롤러가 오류 알림).
         // §7 조용한 실패 금지 — 편집이 소리 없이 사라지지 않게.
         let ok = onContentChange?(draft) ?? true
         guard ok else { return }
-        displayContent = draft
+        vm.content = draft
         isEditing = false
+        vm.setEditing(false)
     }
     private func cancelEdit() {
         isEditing = false   // draft 폐기
+        vm.setEditing(false)
     }
 
     // "원본에 저장" 버튼 아이콘/색 — 평시 ⬆️, 성공 ✓(초록), 실패 ✗(빨강)
@@ -222,7 +221,7 @@ struct StickyContentView: View {
                 }
             } else {
                 ScrollView {
-                    Markdown(displayContent)
+                    Markdown(vm.content)
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
