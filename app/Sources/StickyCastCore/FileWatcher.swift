@@ -48,6 +48,8 @@ public final class FileWatcher {
                 }
             }
             rearmWork[noteID] = work
+            // ⚠️ 불변식: 이 재-arm 지연(0.15s)은 AppDelegate self-write 억제 창(0.3s)보다 반드시 작아야
+            // atomic-save의 self-write 재발화가 억제 안에 들어와 헛 배너를 막는다.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
         }
     }

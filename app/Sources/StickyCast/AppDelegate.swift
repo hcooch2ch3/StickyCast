@@ -151,6 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 break
             case .converged:
                 self.store.setSyncedHash(id: noteID, hash: result.hash)
+                controller.vm.syncBanner = nil   // 파일과 동일 내용 수렴 → 떠있던 충돌 배너 해제 (Minor)
             case .autoApply:
                 switch self.store.applyFileSync(id: noteID, content: result.content, hash: result.hash) {
                 case .success:
@@ -324,6 +325,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             store.setSyncedHash(id: id, hash: ContentHash.sha256Hex(note.content))
             // self-write 억제 창(§3.2, 2차 방어): 재-arm 창에 타이핑해도 헛 배너 방지.
             suppressedNotes.insert(id)
+            // ⚠️ 불변식: 이 억제 창(0.3s)은 FileWatcher 재-arm+onChange 주기(0.15s)보다 반드시 커야
+            // atomic-save의 self-write가 억제 안에서 소거된다. 둘 중 하나만 바꾸면 헛 배너 회귀.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.suppressedNotes.remove(id) }
             return true
         } catch {
