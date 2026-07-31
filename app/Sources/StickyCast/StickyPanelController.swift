@@ -17,7 +17,8 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
     init(note: StickyNote, store: StickyStore,
          onClosed: @escaping (UUID) -> Void,
          onSaveToFile: @escaping (UUID) -> Bool = { _ in false },
-         onError: @escaping (String) -> Void = { _ in }) {
+         onError: @escaping (String) -> Void = { _ in },
+         onTakeFile: @escaping (UUID) -> Void = { _ in }) {
         self.noteID = note.id
         self.store = store
         self.onClosed = onClosed
@@ -71,7 +72,11 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
             onColorChange: { [weak self] key in
                 guard let self else { return }
                 self.store.setColor(id: self.noteID, color: key)
-            }
+            },
+            onTakeFile: isLinked ? { [weak self] in
+                guard let self else { return }
+                onTakeFile(self.noteID)   // 충돌 배너 "파일 내용 가져오기"
+            } : nil
         ))
         // 복원/생성 시 저장된 핀 상태를 창 레벨에 반영 (dual-review iter-003: 복원 시 applyPinned 필수)
         panel.applyPinned(note.pinned == true)

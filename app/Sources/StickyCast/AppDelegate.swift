@@ -106,7 +106,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.controllers[id] = nil
             },
             onSaveToFile: { [weak self] id in self?.saveNoteToSourceFile(id: id) ?? false },
-            onError: { [weak self] message in self?.reportError(message) }
+            onError: { [weak self] message in self?.reportError(message) },
+            onTakeFile: { [weak self] id in self?.takeFileForNote(id: id) }
         )
         controllers[note.id] = controller
         controller.show()
@@ -147,6 +148,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             case .conflict:
                 controller.vm.syncBanner = .conflict
+            }
+        }
+    }
+
+    /// 충돌 배너 "파일 내용 가져오기" — 파일 버전을 강제로 로드(스티커 편집 폐기), 배너 해제 (§3.1).
+    func takeFileForNote(id: UUID) {
+        guard let note = store.notes.first(where: { $0.id == id }),
+              let controller = controllers[id],
+              let url = resolveSourceURL(note: note) else { return }
+        readLinkedFile(url) { [weak self] result in
+            guard let self else { return }
+            defer { controller.vm.syncBanner = nil }
+            guard let result else { return }   // 읽기 실패 시 배너만 닫고 no-op
+            switch self.store.applyFileSync(id: id, content: result.content, hash: result.hash) {
+            case .success:
+                controller.vm.content = result.content
+                controller.vm.oversize = false
+            case .failure(.contentTooLarge):
+                controller.vm.oversize = true
+            case .failure:
+                break
             }
         }
     }

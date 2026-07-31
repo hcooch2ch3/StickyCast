@@ -13,6 +13,7 @@ struct StickyContentView: View {
     let isLinked: Bool                          // 파일 연결 스티커 여부 → "원본에 저장" 버튼 노출
     let onSaveToFile: (() -> Bool)?             // 현재 내용을 원본 파일에 수동 반영 (연결 스티커만). 성공 여부 반환.
     let onColorChange: ((String?) -> Void)?     // 포스트잇 색상 변경 (nil=기본)
+    let onTakeFile: (() -> Void)?               // 충돌 배너 "파일 내용 가져오기" (연결 스티커만)
 
     @Environment(\.colorScheme) private var systemColorScheme
     @State private var hovering = false
@@ -29,6 +30,7 @@ struct StickyContentView: View {
     // 포스트잇 색상 — 스와치 팝오버 + 현재 선택(키 저장은 콜백, 즉시 반영은 @State)
     @State private var colorKey: String?
     @State private var showColorPicker = false
+    @State private var pulseVisible = false      // clean 자동 반영 시 짧은 상단 하이라이트
 
     init(vm: StickyViewModel, initialOpacity: Double, initialPinned: Bool,
          onClose: @escaping () -> Void,
@@ -39,7 +41,8 @@ struct StickyContentView: View {
          isLinked: Bool = false,
          onSaveToFile: (() -> Bool)? = nil,
          initialColor: String? = nil,
-         onColorChange: ((String?) -> Void)? = nil) {
+         onColorChange: ((String?) -> Void)? = nil,
+         onTakeFile: (() -> Void)? = nil) {
         _vm = ObservedObject(wrappedValue: vm)
         self.initialOpacity = initialOpacity
         self.initialPinned = initialPinned
@@ -51,6 +54,7 @@ struct StickyContentView: View {
         self.isLinked = isLinked
         self.onSaveToFile = onSaveToFile
         self.onColorChange = onColorChange
+        self.onTakeFile = onTakeFile
         _colorKey = State(initialValue: initialColor)
         _opacity = State(initialValue: initialOpacity)
         _pinned = State(initialValue: initialPinned)
@@ -200,6 +204,29 @@ struct StickyContentView: View {
             .padding(.horizontal, 8).padding(.vertical, 5)
             .background(.thinMaterial.opacity(hovering ? 1.0 : 0.55))
 
+            // 충돌 배너 — 양쪽 변경 시(§3.1). 편집 UI 위에 표시(편집 유지). 기본 무시 = 비파괴.
+            if vm.syncBanner == .conflict {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    Text("파일과 스티커가 모두 변경됨").font(.caption)
+                    Spacer(minLength: 4)
+                    Button("파일 가져오기") { onTakeFile?() }
+                    Button("내 편집 유지") { vm.syncBanner = nil }
+                }
+                .controlSize(.small)
+                .padding(.horizontal, 8).padding(.vertical, 5)
+                .background(Color.yellow.opacity(0.18))
+            }
+            // 파일 초과 인디케이터 — 지속(토스트 반복 아님, §8.2)
+            if vm.oversize {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.circle").foregroundStyle(.red)
+                    Text("연결 파일이 너무 큼 (최대 1MB) — 반영 안 됨").font(.caption2).foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 8).padding(.vertical, 3)
+            }
+
             // 본문 — 읽기(Markdown) ↔ 편집(TextEditor)
             if isEditing {
                 VStack(spacing: 4) {
@@ -234,6 +261,16 @@ struct StickyContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10))
         // 색상(밝은 파스텔)이 있으면 light 외형 강제 → 글자 검정 + 크롬 밝게 일관. 기본은 시스템 외형 유지.
         .environment(\.colorScheme, colorKey != nil ? .light : systemColorScheme)
+        .overlay(alignment: .top) {   // 자동 반영 플래시 (§4.5 autoSyncPulse)
+            Rectangle().fill(Color.accentColor).frame(height: 2)
+                .opacity(pulseVisible ? 1 : 0)
+        }
+        .onChange(of: vm.autoSyncPulse) { _, _ in
+            pulseVisible = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                withAnimation { pulseVisible = false }
+            }
+        }
         .animation(.easeInOut(duration: 0.15), value: hovering)
         .onHover { hovering = $0 }
     }
