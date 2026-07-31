@@ -107,7 +107,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onSaveToFile: { [weak self] id in self?.saveNoteToSourceFile(id: id) ?? false },
             onError: { [weak self] message in self?.reportError(message) },
-            onTakeFile: { [weak self] id in self?.takeFileForNote(id: id) }
+            onTakeFile: { [weak self] id in self?.takeFileForNote(id: id) },
+            onDetach: { [weak self] id in self?.detachNote(id: id) },
+            onReveal: { [weak self] id in self?.revealNoteInFinder(id: id) },
+            onOpenEditor: { [weak self] id in self?.openNoteInEditor(id: id) }
         )
         controllers[note.id] = controller
         controller.show()
@@ -150,6 +153,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 controller.vm.syncBanner = .conflict
             }
         }
+    }
+
+    /// 연결 해제 — 감시 중단 + 링크 메타 제거(내용 보존) + vm 반영(🔗/⬆️ 숨김) (§6).
+    func detachNote(id: UUID) {
+        fileWatcher.unwatch(noteID: id)
+        store.detachFromFile(id: id)
+        controllers[id]?.vm.isLinked = false
+        controllers[id]?.vm.syncBanner = nil
+        controllers[id]?.vm.oversize = false
+    }
+    /// Finder에서 원본 보기 (§6).
+    func revealNoteInFinder(id: UUID) {
+        guard let note = store.notes.first(where: { $0.id == id }), let url = resolveSourceURL(note: note) else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+    /// 원본을 기본 편집기로 열기 — §2.1.1 "원본에서 편집" 경로 (§6).
+    func openNoteInEditor(id: UUID) {
+        guard let note = store.notes.first(where: { $0.id == id }), let url = resolveSourceURL(note: note) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     /// 충돌 배너 "파일 내용 가져오기" — 파일 버전을 강제로 로드(스티커 편집 폐기), 배너 해제 (§3.1).

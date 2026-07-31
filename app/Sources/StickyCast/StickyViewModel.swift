@@ -10,13 +10,17 @@ enum SyncBanner: Equatable { case conflict }
 /// 코드베이스가 actor 대신 문서 계약으로 메인 스레드를 강제한다.
 final class StickyViewModel: ObservableObject {
     @Published var content: String
+    @Published var isLinked: Bool                  // 파일 연결 여부 — detach 시 false로 → 🔗/⬆️ 반응형 숨김
     @Published var syncBanner: SyncBanner? = nil   // 충돌 시 배너 (Task 8)
     @Published var autoSyncPulse: Bool = false     // clean 자동 반영 인디케이터 트리거 (Task 8)
     @Published var oversize: Bool = false          // 연결 파일이 maxContentBytes 초과 (§8.2, Task 8)
     /// 인라인 편집 중 여부 — Live Sync 판정이 dirty 입력으로 참조(§2). 미커밋 편집 clobber 방지.
     private(set) var isEditing: Bool = false
 
-    init(content: String) { self.content = content }
+    init(content: String, isLinked: Bool = false) {
+        self.content = content
+        self.isLinked = isLinked
+    }
 
     func setEditing(_ v: Bool) { isEditing = v }
 }

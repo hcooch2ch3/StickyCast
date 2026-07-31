@@ -18,14 +18,17 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
          onClosed: @escaping (UUID) -> Void,
          onSaveToFile: @escaping (UUID) -> Bool = { _ in false },
          onError: @escaping (String) -> Void = { _ in },
-         onTakeFile: @escaping (UUID) -> Void = { _ in }) {
+         onTakeFile: @escaping (UUID) -> Void = { _ in },
+         onDetach: @escaping (UUID) -> Void = { _ in },
+         onReveal: @escaping (UUID) -> Void = { _ in },
+         onOpenEditor: @escaping (UUID) -> Void = { _ in }) {
         self.noteID = note.id
         self.store = store
         self.onClosed = onClosed
         self.committedOpacity = note.opacity
         self.panel = StickyPanel(frame: note.frame)
-        self.vm = StickyViewModel(content: note.content)
-        let isLinked = note.sourcePath != nil   // 파일 연결 스티커 → "원본에 저장" 버튼 노출
+        let isLinked = note.sourcePath != nil   // 파일 연결 스티커 → 🔗/⬆️ 노출
+        self.vm = StickyViewModel(content: note.content, isLinked: isLinked)
         super.init()
 
         panel.alphaValue = note.opacity
@@ -62,7 +65,6 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
                     return false
                 }
             },
-            isLinked: isLinked,
             // 파일 연결 스티커만: 현재 내용을 원본 파일에 수동 반영. 성공 여부를 반환해 버튼이 체크/X 표시.
             onSaveToFile: isLinked ? { [weak self] in
                 guard let self else { return false }
@@ -76,7 +78,10 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
             onTakeFile: isLinked ? { [weak self] in
                 guard let self else { return }
                 onTakeFile(self.noteID)   // 충돌 배너 "파일 내용 가져오기"
-            } : nil
+            } : nil,
+            onDetach: isLinked ? { [weak self] in guard let self else { return }; onDetach(self.noteID) } : nil,
+            onRevealInFinder: isLinked ? { [weak self] in guard let self else { return }; onReveal(self.noteID) } : nil,
+            onOpenInEditor: isLinked ? { [weak self] in guard let self else { return }; onOpenEditor(self.noteID) } : nil
         ))
         // 복원/생성 시 저장된 핀 상태를 창 레벨에 반영 (dual-review iter-003: 복원 시 applyPinned 필수)
         panel.applyPinned(note.pinned == true)

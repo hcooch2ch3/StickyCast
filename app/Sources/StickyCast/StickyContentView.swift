@@ -10,8 +10,10 @@ struct StickyContentView: View {
     let onOpacityChange: (Double) -> Void
     let onOpacityCommit: (Double) -> Void
     let onContentChange: ((String) -> Bool)?   // 인라인 편집 저장 콜백. 성공 여부 반환(실패 시 편집 유지). nil이면 편집 비활성
-    let isLinked: Bool                          // 파일 연결 스티커 여부 → "원본에 저장" 버튼 노출
     let onSaveToFile: (() -> Bool)?             // 현재 내용을 원본 파일에 수동 반영 (연결 스티커만). 성공 여부 반환.
+    let onDetach: (() -> Void)?                 // 연결 해제 (🔗 팝오버)
+    let onRevealInFinder: (() -> Void)?         // Finder에서 보기
+    let onOpenInEditor: (() -> Void)?           // 원본 편집기로 열기
     let onColorChange: ((String?) -> Void)?     // 포스트잇 색상 변경 (nil=기본)
     let onTakeFile: (() -> Void)?               // 충돌 배너 "파일 내용 가져오기" (연결 스티커만)
 
@@ -31,6 +33,7 @@ struct StickyContentView: View {
     @State private var colorKey: String?
     @State private var showColorPicker = false
     @State private var pulseVisible = false      // clean 자동 반영 시 짧은 상단 하이라이트
+    @State private var showLinkPopover = false    // 🔗 연결 정보/해제 팝오버
 
     init(vm: StickyViewModel, initialOpacity: Double, initialPinned: Bool,
          onClose: @escaping () -> Void,
@@ -38,11 +41,13 @@ struct StickyContentView: View {
          onOpacityChange: @escaping (Double) -> Void,
          onOpacityCommit: @escaping (Double) -> Void,
          onContentChange: ((String) -> Bool)? = nil,
-         isLinked: Bool = false,
          onSaveToFile: (() -> Bool)? = nil,
          initialColor: String? = nil,
          onColorChange: ((String?) -> Void)? = nil,
-         onTakeFile: (() -> Void)? = nil) {
+         onTakeFile: (() -> Void)? = nil,
+         onDetach: (() -> Void)? = nil,
+         onRevealInFinder: (() -> Void)? = nil,
+         onOpenInEditor: (() -> Void)? = nil) {
         _vm = ObservedObject(wrappedValue: vm)
         self.initialOpacity = initialOpacity
         self.initialPinned = initialPinned
@@ -51,8 +56,10 @@ struct StickyContentView: View {
         self.onOpacityChange = onOpacityChange
         self.onOpacityCommit = onOpacityCommit
         self.onContentChange = onContentChange
-        self.isLinked = isLinked
         self.onSaveToFile = onSaveToFile
+        self.onDetach = onDetach
+        self.onRevealInFinder = onRevealInFinder
+        self.onOpenInEditor = onOpenInEditor
         self.onColorChange = onColorChange
         self.onTakeFile = onTakeFile
         _colorKey = State(initialValue: initialColor)
@@ -182,8 +189,26 @@ struct StickyContentView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("편집")
                 }
+                // 🔗 연결 표시/팝오버 — 파일 연결 스티커만
+                if vm.isLinked, !isEditing {
+                    Button(action: { showLinkPopover.toggle() }) {
+                        Image(systemName: "link").imageScale(.medium).foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("파일 연결")
+                    .popover(isPresented: $showLinkPopover, arrowEdge: .bottom) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Button("Finder에서 보기") { showLinkPopover = false; onRevealInFinder?() }
+                            Button("원본 편집기로 열기") { showLinkPopover = false; onOpenInEditor?() }
+                            Divider()
+                            Button("연결 해제") { showLinkPopover = false; onDetach?() }
+                        }
+                        .buttonStyle(.plain)
+                        .padding(10)
+                    }
+                }
                 // 원본에 저장 — 파일 연결 스티커만. 편집 내용을 원본 .md에 수동 반영 + 결과 시각 피드백.
-                if isLinked, let onSaveToFile, !isEditing {
+                if vm.isLinked, let onSaveToFile, !isEditing {
                     Button(action: { flashSaveResult(onSaveToFile()) }) {
                         Image(systemName: saveIconName)
                             .imageScale(.medium)
