@@ -8,6 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var controllers: [UUID: StickyPanelController] = [:]  // 강한 참조 — 놓으면 패널이 사라짐 (iter-009)
     private(set) var recentErrors: [String] = []  // 메뉴바 "최근 오류" (Task 11)
     private var statusMenu: StatusMenuController!
+    let fileWatcher = FileWatcher()               // Live Sync — 연결 스티커 파일 감시 (§4)
+    private var suppressedNotes: Set<UUID> = []   // ⬆️ 저장 직후 self-write 억제 (§3.2, Task 11)
 
     // "모두 숨기기/보이기" 토글 라벨은 별도 상태 bool이 아니라 실제 창 가시성에서 파생한다
     // (dual-review iter-006: 전역 bool은 per-window 상태와 어긋나 라벨이 거짓말함).
@@ -43,6 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // 앱 종료 시 pending 이동 커밋 flush — 디바운스 창(300ms)에서 종료 시 최종 위치 유실 방지 (iter-009)
     func applicationWillTerminate(_ notification: Notification) {
         controllers.values.forEach { $0.flushPendingMove() }
+        fileWatcher.unwatchAll()   // Live Sync 감시 정리(§4)
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -98,12 +101,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func addController(for note: StickyNote) {
         let controller = StickyPanelController(
             note: note, store: store,
-            onClosed: { [weak self] id in self?.controllers[id] = nil },
+            onClosed: { [weak self] id in
+                self?.fileWatcher.unwatch(noteID: id)   // 닫기 시 감시 정리(§4 누수 방지)
+                self?.controllers[id] = nil
+            },
             onSaveToFile: { [weak self] id in self?.saveNoteToSourceFile(id: id) ?? false },
             onError: { [weak self] message in self?.reportError(message) }
         )
         controllers[note.id] = controller
         controller.show()
+        // 연결 스티커면 Live Sync 감시 arm (§3/§4)
+        if note.sourcePath != nil, let url = resolveSourceURL(note: note) {
+            fileWatcher.watch(noteID: note.id, url: url) { [weak self] in
+                self?.handleFileEvent(noteID: note.id)
+            }
+        }
+    }
+
+    /// FileWatcher 이벤트 → off-main 읽기 → (dirty,file) 판정 → vm 갱신 (§3).
+    private func handleFileEvent(noteID: UUID) {
+        if suppressedNotes.contains(noteID) { return }   // ⬆️ self-write 억제 창(§3.2)
+        guard let note = store.notes.first(where: { $0.id == noteID }),
+              let controller = controllers[noteID],
+              let url = resolveSourceURL(note: note) else { return }
+        readLinkedFile(url) { [weak self] result in
+            guard let self, let result else { return }   // 읽기/decode 실패 → no-op(자동반영 금지, M2)
+            guard let note = self.store.notes.first(where: { $0.id == noteID }) else { return }
+            let stickerHash = ContentHash.sha256Hex(note.content)
+            switch decideSyncAction(stickerHash: stickerHash, fileHash: result.hash,
+                                    syncedHash: note.syncedHash, isEditing: controller.vm.isEditing) {
+            case .ignore:
+                break
+            case .converged:
+                self.store.setSyncedHash(id: noteID, hash: result.hash)
+            case .autoApply:
+                switch self.store.applyFileSync(id: noteID, content: result.content, hash: result.hash) {
+                case .success:
+                    controller.vm.content = result.content
+                    controller.vm.oversize = false
+                    controller.vm.autoSyncPulse.toggle()
+                case .failure(.contentTooLarge):
+                    controller.vm.oversize = true   // 지속 인디케이터(§8.2), 알림 폭풍 아님
+                case .failure:
+                    break
+                }
+            case .conflict:
+                controller.vm.syncBanner = .conflict
+            }
+        }
+    }
+
+    /// 파일을 off-main UTF-8로 읽어 (내용, 해시)를 main으로 콜백. 실패 시 nil(자동반영 금지).
+    func readLinkedFile(_ url: URL, completion: @escaping ((content: String, hash: String)?) -> Void) {
+        DispatchQueue.global(qos: .utility).async {
+            let result: (String, String)? = (try? String(contentsOf: url, encoding: .utf8))
+                .map { ($0, ContentHash.sha256Hex($0)) }
+            DispatchQueue.main.async { completion(result) }
+        }
     }
 
     /// 모든 스티커를 화면에서 감춘다(비파괴 — 노트·컨트롤러 유지). 메뉴바에서 호출.
@@ -156,6 +210,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let mtime = fileModificationDate(url.resolvingSymlinksInPath())
         switch store.add(content: content, sourcePath: url.path, sourceBookmark: bookmark, sourceModifiedDate: mtime) {
         case .success(let note):
+            // open 시점 syncedHash 시딩(§8.1 세 시점 중 ①) — watch arm 전에 기준선 확보.
+            // 없으면 첫 외부 변경에 헛 배너 + ⬆️ 오판(회귀).
+            store.setSyncedHash(id: note.id, hash: ContentHash.sha256Hex(content))
             addController(for: note)
         case .failure(.capReached):
             reportError("스티커가 최대 \(StickyStore.maxStickies)장입니다. 기존 스티커를 닫아 주세요.")
