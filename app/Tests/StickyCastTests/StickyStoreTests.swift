@@ -256,6 +256,31 @@ final class StickyStoreTests: XCTestCase {
         XCTAssertNil(s2.notes[0].syncedHash)
     }
 
+    // MARK: Live Sync — 복원 시딩 (Task 4)
+
+    func testRestoreSeedsSyncedHashForLinkedNotes() {
+        // Phase 1 저장본(연결 노트, syncedHash 없음) 복원 시 내용 해시로 시드
+        let json = """
+        {"schemaVersion":1,"notes":[
+          {"id":"11111111-1111-1111-1111-111111111111","content":"파일내용",
+           "frame":[[0,0],[100,100]],"opacity":1,"createdAt":0,"sourcePath":"/tmp/a.md"}
+        ]}
+        """
+        defaults.set(json.data(using: .utf8), forKey: "stickyStore.v1")
+        let store = makeStore(); store.restore()
+        XCTAssertEqual(store.notes[0].syncedHash, ContentHash.sha256Hex("파일내용"))
+        // 리뷰 합치: 시딩이 save()로 영속화돼 재복원 시에도 살아남고 재시딩 반복 안 함
+        let s2 = makeStore(); s2.restore()
+        XCTAssertEqual(s2.notes[0].syncedHash, ContentHash.sha256Hex("파일내용"))
+    }
+    func testRestoreDoesNotSeedIndependentNotes() {
+        // 연결 아님(sourcePath nil) → 시드 안 함
+        let store = makeStore()
+        _ = try! store.add(content: "독립").get()
+        let s2 = makeStore(); s2.restore()
+        XCTAssertNil(s2.notes[0].syncedHash)
+    }
+
     // MARK: Live Sync — 스토어 메서드 (Task 3)
 
     func testDetachFromFileClearsAllLinkMeta() {

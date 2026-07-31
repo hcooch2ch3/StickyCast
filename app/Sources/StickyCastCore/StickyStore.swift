@@ -208,6 +208,13 @@ public final class StickyStore {
         let withinSize = decoded.filter { $0.content.utf8.count <= Self.maxContentBytes }
         let clamped = Array(withinSize.prefix(Self.maxStickies))
         notes = clamped
+        // syncedHash 시딩(스펙 §8.1): 연결 노트인데 기준선이 없으면(Phase 1 저장본) 스티커 내용을
+        // 기준선으로 채택. 없으면 첫 외부 변경에 헛 배너 + ⬆️ 감지 undefined(회귀).
+        var seeded = false
+        for i in notes.indices where notes[i].sourcePath != nil && notes[i].syncedHash == nil {
+            notes[i].syncedHash = ContentHash.sha256Hex(notes[i].content)
+            seeded = true
+        }
         let outcome = RestoreOutcome(
             restored: clamped.count,
             droppedOversize: decoded.count - withinSize.count,
@@ -215,7 +222,8 @@ public final class StickyStore {
         )
         // 드롭이 있었으면 정규화 결과를 즉시 영속화 — 낡은 over-cap blob이 다음 mutation까지
         // 잔존(매 실행 드롭 반복·저장소 비대)하지 않도록 컴팩션 (A-Minor: restore 후 미저장 갭).
-        if outcome.hasDrops { save() }
+        // 시딩이 있었으면 함께 영속화(다음 실행에 재시딩 반복 방지).
+        if outcome.hasDrops || seeded { save() }
         return outcome
     }
 
