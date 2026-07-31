@@ -7,7 +7,9 @@ import Foundation
 public final class FileWatcher {
     private struct Watch { let source: DispatchSourceFileSystemObject; let scopedURL: URL; let accessing: Bool }
     private var watches: [UUID: Watch] = [:]
-    private var rearming: Set<UUID> = []
+    // 진행 중인 debounce 재-arm을 취소 가능하게 보유(Finding #1): teardown/unwatch가
+    // 예약된 재-arm을 반드시 무효화해야 detach/삭제 후 좀비 감시 부활·fd 누수·헛 다이얼로그를 막는다.
+    private var rearmWork: [UUID: DispatchWorkItem] = [:]
 
     public init() {}
 
@@ -33,12 +35,11 @@ public final class FileWatcher {
         if flags.contains(.write) || flags.contains(.extend) { onChange() }
         if flags.contains(.delete) || flags.contains(.rename) {
             // atomic swap/rename: 현재 fd는 낡음 → 원자적 stop-old, debounce 후 재-arm(§4).
+            // teardown이 이전 예약을 취소하므로 rapid rename도 최신 예약 1개만 남는다.
             teardown(noteID: noteID)
-            guard !rearming.contains(noteID) else { return }
-            rearming.insert(noteID)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            let work = DispatchWorkItem { [weak self] in
                 guard let self else { return }
-                self.rearming.remove(noteID)
+                self.rearmWork[noteID] = nil
                 if FileManager.default.fileExists(atPath: url.path) {
                     self.arm(noteID: noteID, url: url, onChange: onChange)
                     onChange()   // 재-arm = 파일 변경으로 판정부에 통지 (통일된 "재평가" ping)
@@ -46,6 +47,8 @@ public final class FileWatcher {
                     onChange()   // 진짜 삭제 → 판정부(§7)가 재확인 후 삭제 처리
                 }
             }
+            rearmWork[noteID] = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
         }
     }
 
@@ -53,6 +56,8 @@ public final class FileWatcher {
     public func unwatchAll() { Array(watches.keys).forEach { teardown(noteID: $0) } }   // 스냅샷 — 반복 중 변형 방지
 
     private func teardown(noteID: UUID) {
+        rearmWork[noteID]?.cancel()   // 진행 중 재-arm 예약 무효화(Finding #1) — watch 없어도 실행돼야 함
+        rearmWork[noteID] = nil
         guard let w = watches.removeValue(forKey: noteID) else { return }
         w.source.cancel()
         if w.accessing { w.scopedURL.stopAccessingSecurityScopedResource() }
