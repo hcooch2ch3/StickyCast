@@ -16,6 +16,11 @@ final class FileDropView: NSView {
     }
     required init?(coder: NSCoder) { fatalError("not supported") }
 
+    // 마우스 이벤트는 이 뷰를 통과해 아래 statusItem.button(메뉴 열기)이 받게 한다.
+    // 드롭 목적지 등록(registerForDraggedTypes)은 dragging-destination 경로라 hitTest를 안 타므로
+    // nil 반환에도 드롭은 그대로 수신된다 → 클릭 통과를 macOS 버전에 무관하게 보장(dual-review 2차).
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         guard !markdownURLs(sender).isEmpty else { return [] }   // .md 없으면 수락 안 함
         highlighted = true

@@ -271,7 +271,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.allowedContentTypes = types
         NSApp.activate()   // accessory(LSUIElement) 앱 — 패널을 앞으로 가져온다
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        openFile(at: url)
+        reportOpenFailure(openFile(at: url), url.lastPathComponent)
     }
 
     /// 메뉴바 아이콘에 드롭된 파일들 중 .md/.markdown만 스티커로 연다 (§5 드래그앤드롭, Task 12).
@@ -283,16 +283,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             reportError("마크다운(.md/.markdown) 파일만 열 수 있습니다.")
             return
         }
-        mdURLs.forEach { openFile(at: $0) }   // 각 파일을 링크 스티커로(캡 초과 시 openFile이 개별 보고)
+        // 복수 드롭: 파일당 알림 대신 실패를 유형별로 모아 최대 3건으로 집계 보고(dual-review 2차, 알림 폭풍 방지).
+        var capHit = false
+        var tooLarge: [String] = []
+        var readFail: [String] = []
+        for url in mdURLs {
+            switch openFile(at: url) {
+            case .ok: break
+            case .capReached: capHit = true
+            case .tooLarge: tooLarge.append(url.lastPathComponent)
+            case .readFailed: readFail.append(url.lastPathComponent)
+            }
+        }
+        if capHit { reportError("스티커가 최대 \(StickyStore.maxStickies)장이라 일부 파일을 열지 못했습니다.") }
+        if !tooLarge.isEmpty { reportError("파일이 너무 큽니다: \(tooLarge.joined(separator: ", "))") }
+        if !readFail.isEmpty { reportError("읽을 수 없는 파일: \(readFail.joined(separator: ", "))") }
     }
 
-    private func openFile(at url: URL) {
+    /// openFile 결과 — 호출부가 보고 방식을 정한다(단일=즉시, 복수 드롭=집계).
+    private enum OpenOutcome { case ok, readFailed, capReached, tooLarge }
+
+    @discardableResult
+    private func openFile(at url: URL) -> OpenOutcome {
         let content: String
         do {
             content = try String(contentsOf: url, encoding: .utf8)
         } catch {
-            reportError("파일을 읽을 수 없습니다 (\(url.lastPathComponent)). UTF-8 텍스트인지 확인해 주세요.")
-            return
+            return .readFailed
         }
         // Phase 1: 일반 bookmark 저장(비샌드박스에서 동작). Phase 2가 sandbox 전환 시
         // security-scoped bookmark(.withSecurityScope)로 승격 + FileWatcher 연결 (스펙 §1.1/§4.3).
@@ -303,12 +320,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // 없으면 첫 외부 변경에 헛 배너 + ⬆️ 오판(회귀).
             store.setSyncedHash(id: note.id, hash: ContentHash.sha256Hex(content))
             addController(for: note)
+            return .ok
         case .failure(.capReached):
-            reportError("스티커가 최대 \(StickyStore.maxStickies)장입니다. 기존 스티커를 닫아 주세요.")
+            return .capReached
         case .failure(.contentTooLarge):
-            reportError("파일이 너무 큽니다 (최대 약 \(StickyStore.maxContentBytes / (1024 * 1024))MB).")
+            return .tooLarge
         case .failure(.noteNotFound):
-            break   // add는 이 에러를 반환하지 않음 (스위치 망라용 방어)
+            return .ok   // add는 이 에러를 반환하지 않음 (스위치 망라용 방어)
+        }
+    }
+
+    /// 단일 파일 열기 실패를 즉시 1건 보고 (패널 경로).
+    private func reportOpenFailure(_ outcome: OpenOutcome, _ name: String) {
+        switch outcome {
+        case .ok: break
+        case .readFailed: reportError("파일을 읽을 수 없습니다 (\(name)). UTF-8 텍스트인지 확인해 주세요.")
+        case .capReached: reportError("스티커가 최대 \(StickyStore.maxStickies)장입니다. 기존 스티커를 닫아 주세요.")
+        case .tooLarge: reportError("파일이 너무 큽니다 (최대 약 \(StickyStore.maxContentBytes / (1024 * 1024))MB).")
         }
     }
 
