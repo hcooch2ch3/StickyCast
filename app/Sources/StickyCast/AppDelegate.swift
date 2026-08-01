@@ -270,6 +270,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         openFile(at: url)
     }
 
+    /// 메뉴바 아이콘에 드롭된 파일들 중 .md/.markdown만 스티커로 연다 (§5 드래그앤드롭, Task 12).
+    /// 뷰(FileDropView)가 이미 확장자 필터를 적용하지만, 진입점을 방어적으로 한 번 더 거른다.
+    func openDroppedFiles(_ urls: [URL]) {
+        let exts: Set<String> = ["md", "markdown"]
+        let mdURLs = urls.filter { exts.contains($0.pathExtension.lowercased()) }
+        guard !mdURLs.isEmpty else {
+            reportError("마크다운(.md/.markdown) 파일만 열 수 있습니다.")
+            return
+        }
+        mdURLs.forEach { openFile(at: $0) }   // 각 파일을 링크 스티커로(캡 초과 시 openFile이 개별 보고)
+    }
+
     private func openFile(at url: URL) {
         let content: String
         do {

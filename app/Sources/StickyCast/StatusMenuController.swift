@@ -14,6 +14,21 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu
+        installFileDrop()
+    }
+
+    /// 메뉴바 아이콘에 .md 드롭 → 스티커로 열기 (§5, Task 12). button 위에 드롭 대상 뷰를 채워 부착.
+    private func installFileDrop() {
+        guard let button = statusItem.button else { return }
+        let drop = FileDropView { [weak self] urls in self?.appDelegate.openDroppedFiles(urls) }
+        drop.translatesAutoresizingMaskIntoConstraints = false
+        button.addSubview(drop)
+        NSLayoutConstraint.activate([
+            drop.leadingAnchor.constraint(equalTo: button.leadingAnchor),
+            drop.trailingAnchor.constraint(equalTo: button.trailingAnchor),
+            drop.topAnchor.constraint(equalTo: button.topAnchor),
+            drop.bottomAnchor.constraint(equalTo: button.bottomAnchor),
+        ])
     }
 
     private func setIcon(error: Bool) {
