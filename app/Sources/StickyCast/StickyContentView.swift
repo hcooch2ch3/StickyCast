@@ -141,8 +141,14 @@ struct StickyContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // 상단 크롬바 — 상시 노출(호버 시 진해짐). 좌:핀 / 중앙:투명도 / 우:편집·저장·닫기
+            // 상단 크롬바 — 상시 노출(호버 시 진해짐). 좌:닫기·핀 / 중앙:투명도 / 우:편집·저장
             HStack(spacing: 8) {
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill").imageScale(.medium)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("스티커 닫기")
+
                 Button(action: { pinned.toggle(); onTogglePin(pinned) }) {
                     Image(systemName: pinned ? "pin.fill" : "pin")
                         .imageScale(.medium)
@@ -220,11 +226,6 @@ struct StickyContentView: View {
                     .accessibilityLabel(saveFlash == .success ? "저장됨" : "원본 파일에 저장")
                     .help("원본 파일에 저장")
                 }
-                Button(action: onClose) {
-                    Image(systemName: "xmark.circle.fill").imageScale(.medium)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("스티커 닫기")
             }
             .padding(.horizontal, 8).padding(.vertical, 5)
             .background(.thinMaterial.opacity(hovering ? 1.0 : 0.55))
