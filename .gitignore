@@ -11,3 +11,7 @@ extension/dist/
 .superpowers/
 docs/superpowers/
 .omx-*/
+
+# macOS / 로컬 작업 파일 (공개 리포에 미포함)
+.DS_Store
+HANDOFF.md
