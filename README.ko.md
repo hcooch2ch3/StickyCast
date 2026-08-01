@@ -6,8 +6,8 @@ MarkEdit에서 선택한 마크다운을 macOS 데스크탑에 **플로팅 스�
 
 두 컴포넌트로 구성됩니다:
 
-- **MarkEdit 확장** (`extension/`) — 에디터에서 선택한 마크다운을 `sticky://` URL 스킴으로 발사
-- **컴패니언 앱 StickyCast** (`app/`) — URL을 받아 데스크탑에 반투명 스티커 창으로 표시 (📌로 고정한 것만 항상 위)
+- **MarkEdit 확장**(`extension/`)은 에디터에서 선택한 마크다운을 `sticky://` URL 스킴으로 발사합니다.
+- **컴패니언 앱 StickyCast**(`app/`)는 URL을 받아 데스크탑에 반투명 스티커 창으로 표시합니다(📌로 고정한 것만 항상 위).
 
 두 컴포넌트는 커스텀 URL 스킴 하나(`sticky://`)로만 연결되는 느슨한 결합입니다. 계약은 [`docs/url-scheme-spec.md`](docs/url-scheme-spec.md).
 
@@ -28,7 +28,7 @@ cd app
 ./make-app.sh      # 빌드 → .app 조립 → Launch Services 등록 → 실행
 ```
 
-`build/StickyCast.app`이 생성·실행됩니다. Dock에는 나타나지 않고(LSUIElement) 메뉴바에 `note.text` 아이콘으로 상주합니다.
+`build/StickyCast.app`이 생성되고 실행됩니다. Dock에는 나타나지 않고(LSUIElement) 메뉴바에 `note.text` 아이콘으로 상주합니다.
 
 ### 2. MarkEdit 확장
 
@@ -54,26 +54,26 @@ MarkEdit을 재시작하면 **Extensions ▸ Pop as Sticky** 메뉴가 나타납
 - **📌로 고정한 스티커**만 항상 맨 위에 떠 있어 작업 중에도 계속 보입니다.
 - ✕(닫기)는 삭제입니다.
 
-위치·크기·투명도·고정 상태는 저장되어 앱을 재시작해도 복원됩니다.
+위치, 크기, 투명도, 고정 상태는 저장되어 앱을 재시작해도 복원됩니다.
 
-메뉴바 아이콘에서 스티커 목록, **모두 숨기기/보이기**(한 번에 치웠다가 되띄우기 — 삭제 아님), 모두 앞으로/모두 닫기, 최근 오류, StickyCast에 관하여, 종료를 이용할 수 있습니다.
+메뉴바 아이콘에서 스티커 목록, **모두 숨기기/보이기**(한 번에 치웠다가 되띄우기, 삭제 아님), 모두 앞으로/모두 닫기, 최근 오류, StickyCast에 관하여, 종료를 이용할 수 있습니다.
 
 ## 제약 (v1)
 
-- 뷰어 전용 — 스티커에서 편집·파일 저장 불가
-- 스티커 최대 30장, 내용 크기 한도 약 1MB(원문 — 사실상 모든 마크다운 문서 커버). 초과 시 잘리지 않고 안내 후 거부
+- 뷰어 전용이라 스티커에서 편집이나 파일 저장 불가
+- 스티커 최대 30장, 내용 크기 한도 약 1MB(원문 기준, 사실상 모든 마크다운 문서 커버). 초과 시 잘리지 않고 안내 후 거부
 - 마크다운은 GFM 표준만 렌더
 
 ## 개발
 
 ```bash
-cd app && swift test          # 코어 로직 단위 테스트 (파서·스토어)
+cd app && swift test          # 코어 로직 단위 테스트 (파서, 스토어)
 cd extension && npm test      # 인코딩 단위 테스트
 ```
 
 설계 배경과 검증 이력은 [`docs/`](docs/)를 참고하세요 (`url-scheme-spec.md`, `preflight-results.md`, `markedit-api-notes.md`, `e2e-checklist.md`).
 
-## 라이선스 · 크레딧
+## 라이선스와 크레딧
 
 이 프로젝트는 [MIT 라이선스](LICENSE)로 배포됩니다.
 
