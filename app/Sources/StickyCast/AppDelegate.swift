@@ -5,32 +5,32 @@ import StickyCastCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var store: StickyStore!
-    private(set) var controllers: [UUID: StickyPanelController] = [:]  // strong reference; drop it and the panel disappears (iter-009)
-    private(set) var recentErrors: [String] = []  // menu bar "최근 오류" (Task 11)
+    private(set) var controllers: [UUID: StickyPanelController] = [:]  // strong reference; drop it and the panel disappears
+    private(set) var recentErrors: [String] = []  // menu bar "최근 오류"
     private var statusMenu: StatusMenuController!
-    let fileWatcher = FileWatcher()               // Live Sync: watch linked sticker files (§4)
-    private var suppressedNotes: Set<UUID> = []   // ⬆️ suppress the self-write right after saving (§3.2, Task 11)
-    private let readGen = ReadGeneration()        // discard out-of-order file-read completions: latest-wins (Finding #2)
+    let fileWatcher = FileWatcher()               // Live Sync: watch linked sticker files
+    private var suppressedNotes: Set<UUID> = []   // ⬆️ suppress the self-write right after saving
+    private let readGen = ReadGeneration()        // discard out-of-order file-read completions: latest-wins
 
     // The "hide/show all" toggle label derives from actual window visibility, not a separate state bool
-    // (dual-review iter-006: a global bool drifts from per-window state and the label lies).
+    // (a global bool drifts from per-window state and the label lies).
     var anyStickerVisible: Bool { controllers.values.contains { $0.isVisible } }
 
     // Cheap URL length cap before parsing (cut abnormally large URLs before decoding). The exact content byte
     // limit is enforced from a single source, StickyStore.maxContentBytes, on both add() and restore() (re-review: unify the constant, close the restore gap).
     private let maxReceivedURLLength = 2 * 1024 * 1024
 
-    // Queue for URLs that arrive before launch finishes (prevents a store-nil crash, iter-010). Empty on the normal path, but it enforces the ordering invariant.
+    // Queue for URLs that arrive before launch finishes (prevents a store-nil crash). Empty on the normal path, but it enforces the ordering invariant.
     private var pendingURLs: [URL] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let screen = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
         store = StickyStore(defaults: .standard, screenFrame: screen)
 
-        // Stand up the menu bar before handling URLs so reportError's badge display is valid afterward (iter-010 §7 fallback)
+        // Stand up the menu bar before handling URLs so reportError's badge display is valid afterward
         statusMenu = StatusMenuController(appDelegate: self)
 
-        // Notification permission: request on first launch (§7: requesting at the first error would swallow that error)
+        // Notification permission: request on first launch (requesting at the first error would swallow that error)
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { _, _ in }
 
         verifySchemeHandler()
@@ -43,14 +43,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         queued.forEach(handle(url:))
     }
 
-    // On app quit, flush pending move commits to avoid losing the final position if we quit inside the debounce window (300ms) (iter-009)
+    // On app quit, flush pending move commits to avoid losing the final position if we quit inside the debounce window (300ms)
     func applicationWillTerminate(_ notification: Notification) {
         controllers.values.forEach { $0.flushPendingMove() }
-        fileWatcher.unwatchAll()   // clean up Live Sync watches (§4)
+        fileWatcher.unwatchAll()   // clean up Live Sync watches
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
-        // If the store isn't up yet (before launch), queue and handle at launch (iter-010)
+        // If the store isn't up yet (before launch), queue and handle at launch
         guard store != nil else {
             pendingURLs.append(contentsOf: urls)
             return
@@ -91,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for note in store.notes {
             addController(for: note)
         }
-        // §7: if restore dropped any notes, tell the user instead of failing silently (consistent with the receive path).
+        // If restore dropped any notes, tell the user instead of failing silently (consistent with the receive path).
         guard outcome.hasDrops else { return }
         var parts: [String] = []
         if outcome.droppedOversize > 0 { parts.append("크기 초과 \(outcome.droppedOversize)개") }
@@ -103,7 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let controller = StickyPanelController(
             note: note, store: store,
             onClosed: { [weak self] id in
-                self?.fileWatcher.unwatch(noteID: id)   // clean up the watch on close (§4 leak prevention)
+                self?.fileWatcher.unwatch(noteID: id)   // clean up the watch on close (leak prevention)
                 self?.controllers[id] = nil
             },
             onSaveToFile: { [weak self] id in self?.saveNoteToSourceFile(id: id) ?? false },
@@ -115,7 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         controllers[note.id] = controller
         controller.show()
-        // If it's a linked sticker, arm the Live Sync watch (§3/§4)
+        // If it's a linked sticker, arm the Live Sync watch
         if note.sourcePath != nil, let url = resolveSourceURL(note: note) {
             fileWatcher.watch(noteID: note.id, url: url) { [weak self] in
                 self?.handleFileEvent(noteID: note.id)
@@ -123,22 +123,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// FileWatcher event → off-main read → decide (dirty, file) → update vm (§3). Also handles delete/move (§7).
+    /// FileWatcher event → off-main read → decide (dirty, file) → update vm. Also handles delete/move.
     private func handleFileEvent(noteID: UUID) {
-        if suppressedNotes.contains(noteID) { return }   // ⬆️ self-write suppression window (§3.2)
+        if suppressedNotes.contains(noteID) { return }   // ⬆️ self-write suppression window
         guard let note = store.notes.first(where: { $0.id == noteID }),
               let controller = controllers[noteID] else { return }
-        // Move tracking: resolve the current path via bookmark. If there's none or the file is gone, treat it as a delete (§7; FileWatcher already debounced).
+        // Move tracking: resolve the current path via bookmark. If there's none or the file is gone, treat it as a delete (FileWatcher already debounced).
         guard let url = resolveSourceURL(note: note), FileManager.default.fileExists(atPath: url.path) else {
             handleDeletedFile(noteID: noteID)
             return
         }
-        // If the path changed (same-volume move), update sourcePath and bookmark, then re-arm the watcher (§7)
+        // If the path changed (same-volume move), update sourcePath and bookmark, then re-arm the watcher
         if url.path != note.sourcePath {
             store.setSourcePath(id: noteID, path: url.path, bookmark: try? url.bookmarkData())
             fileWatcher.watch(noteID: noteID, url: url) { [weak self] in self?.handleFileEvent(noteID: noteID) }
         }
-        let gen = readGen.begin(noteID)   // generation token for this read; on completion, check it's still the latest (Finding #2)
+        let gen = readGen.begin(noteID)   // generation token for this read; on completion, check it's still the latest
         readLinkedFile(url) { [weak self] result in
             guard let self else { return }
             guard self.readGen.isCurrent(noteID, gen) else { return }   // a newer read started after this one → discard (avoid getting stuck on stale data)
@@ -151,7 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 break
             case .converged:
                 self.store.setSyncedHash(id: noteID, hash: result.hash)
-                controller.vm.syncBanner = nil   // content converged with the file → clear any lingering conflict banner (Minor)
+                controller.vm.syncBanner = nil   // content converged with the file → clear any lingering conflict banner
             case .autoApply:
                 switch self.store.applyFileSync(id: noteID, content: result.content, hash: result.hash) {
                 case .success:
@@ -159,7 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     controller.vm.oversize = false
                     controller.vm.autoSyncPulse.toggle()
                 case .failure(.contentTooLarge):
-                    controller.vm.oversize = true   // persistent indicator (§8.2), not a notification storm
+                    controller.vm.oversize = true   // persistent indicator, not a notification storm
                 case .failure:
                     break
                 }
@@ -169,7 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Linked file deleted (still absent after debounce and resolve) → "keep (detach) / close" dialog (§7).
+    /// Linked file deleted (still absent after debounce and resolve) → "keep (detach) / close" dialog.
     private func handleDeletedFile(noteID: UUID) {
         guard let note = store.notes.first(where: { $0.id == noteID }) else { return }
         let name = (note.sourcePath as NSString?)?.lastPathComponent ?? "파일"
@@ -187,7 +187,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Detach: stop watching, remove link metadata (content preserved), reflect in vm (hide 🔗/⬆️) (§6).
+    /// Detach: stop watching, remove link metadata (content preserved), reflect in vm (hide 🔗/⬆️).
     func detachNote(id: UUID) {
         fileWatcher.unwatch(noteID: id)
         store.detachFromFile(id: id)
@@ -195,23 +195,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controllers[id]?.vm.syncBanner = nil
         controllers[id]?.vm.oversize = false
     }
-    /// Reveal the source in Finder (§6).
+    /// Reveal the source in Finder.
     func revealNoteInFinder(id: UUID) {
         guard let note = store.notes.first(where: { $0.id == id }), let url = resolveSourceURL(note: note) else { return }
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
-    /// Open the source in the default editor: §2.1.1 "edit in source" path (§6).
+    /// Open the source in the default editor: the "edit in source" path.
     func openNoteInEditor(id: UUID) {
         guard let note = store.notes.first(where: { $0.id == id }), let url = resolveSourceURL(note: note) else { return }
         NSWorkspace.shared.open(url)
     }
 
-    /// Conflict banner "take file content": force-load the file version (discard sticker edits), clear the banner (§3.1).
+    /// Conflict banner "take file content": force-load the file version (discard sticker edits), clear the banner.
     func takeFileForNote(id: UUID) {
         guard let note = store.notes.first(where: { $0.id == id }),
               let controller = controllers[id],
               let url = resolveSourceURL(note: note) else { return }
-        // Join the generation scheme (dual-review round 2): begin invalidates in-flight stale auto-reads, and take itself
+        // Join the generation scheme: begin invalidates in-flight stale auto-reads, and take itself
         // joins latest-wins too, so a stale auto-read arriving late won't clobber the user's "take file".
         let gen = readGen.begin(id)
         readLinkedFile(url) { [weak self] result in
@@ -245,7 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Bring all hidden stickers back to the front.
     func showAllStickers() { controllers.values.forEach { $0.show() } }
 
-    // MARK: Convenience features Phase 1: clipboard, open file, export (spec §3.1/§3.4)
+    // MARK: Convenience features Phase 1: clipboard, open file, export
 
     /// Create a standalone sticker from clipboard text. Menu bar "클립보드에서 스티커".
     func createStickyFromClipboard() {
@@ -258,7 +258,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Pick a .md via NSOpenPanel → turn its content into a sticker. Store link metadata (sourcePath/bookmark), but
-    /// Phase 1 leaves the sticker standalone (editable) (spec §4.1.1). Read-only and Live Sync come in Phase 2.
+    /// Phase 1 leaves the sticker standalone (editable). Read-only and Live Sync come in Phase 2.
     func openMarkdownFile() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
@@ -274,7 +274,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         reportOpenFailure(openFile(at: url), url.lastPathComponent)
     }
 
-    /// Among files dropped on the menu bar icon, open only .md/.markdown as stickers (§5 drag-and-drop, Task 12).
+    /// Among files dropped on the menu bar icon, open only .md/.markdown as stickers (drag-and-drop).
     /// The view (FileDropView) already applies an extension filter, but filter once more defensively at the entry point.
     func openDroppedFiles(_ urls: [URL]) {
         let exts: Set<String> = ["md", "markdown"]
@@ -283,7 +283,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             reportError("마크다운(.md/.markdown) 파일만 열 수 있습니다.")
             return
         }
-        // Multi-drop: instead of one notification per file, group failures by type and report up to 3 aggregates (dual-review round 2, avoid a notification storm).
+        // Multi-drop: instead of one notification per file, group failures by type and report up to 3 aggregates (avoid a notification storm).
         var capHit = false
         var tooLarge: [String] = []
         var readFail: [String] = []
@@ -312,11 +312,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return .readFailed
         }
         // Phase 1: store a plain bookmark (works outside the sandbox). When Phase 2 moves to the sandbox,
-        // promote to a security-scoped bookmark (.withSecurityScope) and wire up FileWatcher (spec §1.1/§4.3).
+        // promote to a security-scoped bookmark (.withSecurityScope) and wire up FileWatcher.
         let bookmark = try? url.bookmarkData()
         switch store.add(content: content, sourcePath: url.path, sourceBookmark: bookmark) {
         case .success(let note):
-            // Seed syncedHash at open time (point ① of the three in §8.1): establish a baseline before arming the watch.
+            // Seed syncedHash at open time: establish a baseline before arming the watch.
             // Without it, the first external change causes a bogus banner and a false ⬆️ (regression).
             store.setSyncedHash(id: note.id, hash: ContentHash.sha256Hex(content))
             addController(for: note)
@@ -341,7 +341,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Manually push a linked sticker's current content to its source .md file (explicit user action).
-    /// Not two-way auto-sync (spec §2.1 rules that out): only on button press, a one-way sticker→file write, so
+    /// Not two-way auto-sync: only on button press, a one-way sticker→file write, so
     /// it's the sole writer at that moment and avoids conflicts. Independent of Live Sync (file→sticker, Phase 2).
     /// Returns true on success so the caller (sticker button) can give instant visual feedback (check/X). Failures notify in detail via reportError.
     @discardableResult
@@ -355,7 +355,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // the link with a regular file and breaking the vault's symlink structure (review B Major).
         let url = resolved.resolvingSymlinksInPath()
 
-        // Conflict detection (hash-based, §3.2): if the current file content hash != syncedHash, it changed externally → confirmation dialog.
+        // Conflict detection (hash-based): if the current file content hash != syncedHash, it changed externally → confirmation dialog.
         // If syncedHash==nil (not seeded), skip detection (mirrors the Phase 1 mtime-nil guard; without it, the first ⬆️ triggers a bogus dialog, a regression).
         if let baseline = note.syncedHash,
            let fileContent = try? String(contentsOf: url, encoding: .utf8),
@@ -365,9 +365,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         do {
             try note.content.write(to: url, atomically: true, encoding: .utf8)
-            // Ordering guarantee (§3.2): update syncedHash synchronously right after the write → the incoming watcher callback sees F=false and ignores it.
+            // Ordering guarantee: update syncedHash synchronously right after the write → the incoming watcher callback sees F=false and ignores it.
             store.setSyncedHash(id: id, hash: ContentHash.sha256Hex(note.content))
-            // self-write suppression window (§3.2, second line of defense): prevents a bogus banner even if the user types during the re-arm window.
+            // self-write suppression window (second line of defense): prevents a bogus banner even if the user types during the re-arm window.
             suppressedNotes.insert(id)
             // ⚠️ Invariant: this suppression window (0.3s) must be larger than the FileWatcher re-arm + onChange cycle (0.15s)
             // so the atomic-save's self-write is absorbed within suppression. Change only one of them and the bogus banner regresses.
@@ -419,7 +419,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// §7 no silent failures: try a notification and always append to the menu bar's recent errors (permission-independent fallback)
+    /// No silent failures: try a notification and always append to the menu bar's recent errors (permission-independent fallback)
     func reportError(_ message: String) {
         recentErrors = Array((recentErrors + [message]).suffix(5))
         let content = UNMutableNotificationContent()
@@ -428,15 +428,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         UNUserNotificationCenter.current().add(
             UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         ) { error in
-            if let error { NSLog("StickyCast notification add failed: %@", "\(error)") }  // no silent failures (iter-011)
+            if let error { NSLog("StickyCast notification add failed: %@", "\(error)") }  // no silent failures
         }
         NSLog("StickyCast error: %@", message)
-        statusMenu?.indicateError()  // §7 fallback: even if the notification isn't visible, flag it via the menu bar icon badge
+        statusMenu?.indicateError()  // fallback: even if the notification isn't visible, flag it via the menu bar icon badge
     }
 
-    /// §7: self-check that this app is the sticky:// handler. Compare by bundleIdentifier (robust against symlinks),
-    /// treat nil (handler unregistered) as an error too, and only run in a .app bundle (avoids a swift run false positive, iter-011).
-    /// Checks once at app launch (not per URL), which also catches handler hijacking on a later launch (more robust than spec §7's "once on first launch").
+    /// Self-check that this app is the sticky:// handler. Compare by bundleIdentifier (robust against symlinks),
+    /// treat nil (handler unregistered) as an error too, and only run in a .app bundle (avoids a swift run false positive).
+    /// Checks once at app launch (not per URL), which also catches handler hijacking on a later launch.
     private func verifySchemeHandler() {
         guard Bundle.main.bundleURL.pathExtension == "app",
               let probe = URL(string: "sticky://new") else { return }

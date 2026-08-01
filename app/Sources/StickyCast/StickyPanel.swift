@@ -18,9 +18,9 @@ final class StickyPanel: NSPanel {
         backgroundColor = .clear
         hasShadow = true
         // core of a cross-app sticker: it must not hide when another app activates. The NSPanel default
-        // varies by config, so pin it explicitly (iter-003 review: leaving it unset risks defeating always-visible).
+        // varies by config, so pin it explicitly (leaving it unset risks defeating always-visible).
         hidesOnDeactivate = false
-        // Task 3 settled (2026-07-12 GUI check): canBecomeKey=true plus becomesKeyOnlyIfNeeded lets
+        // settled (2026-07-12 GUI check): canBecomeKey=true plus becomesKeyOnlyIfNeeded lets
         // SwiftUI controls (slider/buttons) respond to the mouse. With canBecomeKey=false the controls die and
         // the panel wasn't exposed to the AX tree either (auto-verified). The .nonactivatingPanel styleMask blocks app activation (focus theft),
         // so even when key it keeps the previous app's focus (verified: after a click appActive=false, frontmost unchanged).
@@ -30,8 +30,8 @@ final class StickyPanel: NSPanel {
     override var canBecomeKey: Bool { true }
 
     /// pin toggle: always-on-top (.floating) ↔ normal (.normal). isFloatingPanel is matched to the level too.
-    /// re-assert hidesOnDeactivate=false on every toggle: insurance so the cross-app always-visible invariant (§init)
-    /// isn't shaken by any AppKit flag interaction (dual-review iter-003, critic).
+    /// re-assert hidesOnDeactivate=false on every toggle: insurance so the cross-app always-visible invariant (set in init)
+    /// isn't shaken by any AppKit flag interaction.
     func applyPinned(_ pinned: Bool) {
         hidesOnDeactivate = false
         level = pinned ? .floating : .normal

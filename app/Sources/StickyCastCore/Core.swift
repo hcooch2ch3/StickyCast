@@ -1,4 +1,4 @@
-// StickyCastCore: target anchor (Task 7, 8 add the real code)
+// StickyCastCore: target anchor
 
 import Foundation
 

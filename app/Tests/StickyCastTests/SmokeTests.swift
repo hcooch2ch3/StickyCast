@@ -1,4 +1,4 @@
-// Target resolution and test-runner smoke check (real tests added in Task 7)
+// Target resolution and test-runner smoke check
 import XCTest
 @testable import StickyCastCore
 

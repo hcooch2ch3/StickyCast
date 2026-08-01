@@ -1,5 +1,5 @@
 // Selection → content derivation from index.ts (split out as a pure function so it can be unit-tested without the MarkEdit global).
-// markedit-api getText signature: getText(range?: TextRange). Omit range to get the whole document (docs/markedit-api-notes.md).
+// markedit-api getText signature: getText(range?: TextRange). Omit range to get the whole document.
 
 export interface TextRange {
   readonly from: number;

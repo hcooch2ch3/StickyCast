@@ -1,6 +1,6 @@
 import Foundation
 
-/// Per-note monotonic generation counter. Discards out-of-order completions of async file reads via latest-wins (Finding #2).
+/// Per-note monotonic generation counter. Discards out-of-order completions of async file reads via latest-wins.
 ///
 /// `.write`/`.extend` fire immediately with no debounce, and `readLinkedFile` dispatches to a global
 /// queue with no ordering guarantee, so on rapid back-to-back saves the completions can reach main in

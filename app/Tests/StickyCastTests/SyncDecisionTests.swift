@@ -3,7 +3,7 @@ import XCTest
 
 final class SyncDecisionTests: XCTestCase {
     func testNilSyncedHashIgnores() {
-        // unseeded → cannot detect external changes, safely ignore (spec §8.1)
+        // unseeded → cannot detect external changes, safely ignore
         XCTAssertEqual(decideSyncAction(stickerHash: "s", fileHash: "f", syncedHash: nil, isEditing: false), .ignore)
         XCTAssertEqual(decideSyncAction(stickerHash: "s", fileHash: "f", syncedHash: nil, isEditing: true), .ignore)
     }

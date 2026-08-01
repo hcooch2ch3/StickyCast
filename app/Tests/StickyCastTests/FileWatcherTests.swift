@@ -25,7 +25,7 @@ final class FileWatcherTests: XCTestCase {
         try? FileManager.default.removeItem(atPath: dir)
     }
 
-    // Finding #1 regression: after a rename schedules a debounce re-arm, unwatching within that
+    // Regression: after a rename schedules a debounce re-arm, unwatching within that
     // 150ms window must cancel the scheduled re-arm so no further ping arrives (prevents zombie
     // watcher revival and spurious dialogs).
     func testUnwatchDuringRearmWindowCancelsPendingRearm() {
@@ -56,7 +56,7 @@ final class FileWatcherTests: XCTestCase {
         try? FileManager.default.removeItem(atPath: dir)
     }
 
-    // Fix #2 regression (second dual-review pass): unwatchAll must also cancel a mid-rearm note
+    // Regression: unwatchAll must also cancel a mid-rearm note
     // (absent from watches but present in rearmWork). Calling unwatchAll inside the re-arm window
     // after a rename should leave no further ping.
     func testUnwatchAllDuringRearmWindowCancelsPendingRearm() {

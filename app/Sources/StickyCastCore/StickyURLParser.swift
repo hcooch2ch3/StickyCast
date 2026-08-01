@@ -6,8 +6,8 @@ public enum StickyURLError: Error, Equatable {
     case invalidEncoding  // content alphabet violation / base64 or UTF-8 decode failure
 }
 
-/// sticky:// URL parser (docs/url-scheme-spec.md contract). Pure logic, no AppKit.
-/// Note: the raw URL length limit (receiver-side oversize) is decided by the AppDelegate that receives the URL (Task 10), not this parser.
+/// sticky:// URL parser. Pure logic, no AppKit.
+/// Note: the raw URL length limit (receiver-side oversize) is decided by the AppDelegate that receives the URL, not this parser.
 public enum StickyURLParser {
     // content alphabet: base64url (unpadded). \A…\z anchor the whole string. NSRegularExpression's $ allows a trailing \n, so it's banned.
     private static let base64urlAlphabet = try! NSRegularExpression(pattern: "\\A[A-Za-z0-9_-]+\\z")

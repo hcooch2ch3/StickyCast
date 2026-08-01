@@ -4,11 +4,11 @@ import CoreGraphics
 public enum StickyStoreError: Error, Equatable {
     case capReached          // sticker count (maxStickies) exceeded
     case contentTooLarge     // content bytes (maxContentBytes) exceeded
-    case noteNotFound        // updateContent: the edit-target id doesn't exist (no silent failure, §4.2.1)
+    case noteNotFound        // updateContent: the edit-target id doesn't exist (no silent failure)
 }
 
 /// Summary of a restore() result. Exposes drop counts so the caller (AppDelegate) can tell the user:
-/// §7 "no silent failure": if a note is dropped on restore, surface it to the user the way the receive path does.
+/// "no silent failure": if a note is dropped on restore, surface it to the user the way the receive path does.
 public struct RestoreOutcome: Equatable {
     public let restored: Int         // notes actually restored
     public let droppedOversize: Int  // dropped for exceeding content bytes
@@ -23,7 +23,7 @@ public struct StickyNote: Codable, Identifiable, Equatable {
     public var opacity: Double
     public let createdAt: Date
     public var pinned: Bool? = nil   // whether it's always-on-top (.floating). nil = not pinned. Optional, so the synthesized decoder fills a missing key with nil and v1 notes survive.
-    // File linking (convenience feature). nil = standalone sticker. Optional, so the synthesized decoder fills a missing key with nil and existing notes survive (stays schemaVersion 1, spec §4.1.1).
+    // File linking (convenience feature). nil = standalone sticker. Optional, so the synthesized decoder fills a missing key with nil and existing notes survive (stays schemaVersion 1).
     // Phase 1 stores the values only and leaves stickers editable (standalone). Phase 2 promotes these fields for Live Sync and read-only.
     public var sourcePath: String? = nil       // linked file path
     public var sourceBookmark: Data? = nil     // security-scoped bookmark for tracking file moves (Phase 2)
@@ -33,10 +33,10 @@ public struct StickyNote: Codable, Identifiable, Equatable {
 }
 
 /// Single source of truth for sticker state. Independent of AppKit window code, so it's unit tested.
-/// Save policy (§5.2): discrete events (add/remove) save immediately; continuous gestures save only on a commit* call.
+/// Save policy: discrete events (add/remove) save immediately; continuous gestures save only on a commit* call.
 ///
 /// Thread contract: **main thread only**. The only callers are AppKit `application(_:open:)` and UI callbacks,
-/// all of which run on the main thread. `notes` isn't synchronized, so off-main access is a data race (iter-008 review).
+/// all of which run on the main thread. `notes` isn't synchronized, so off-main access is a data race.
 public final class StickyStore {
     private static let schemaVersion = 1
     public static let maxStickies = 30
@@ -78,7 +78,7 @@ public final class StickyStore {
     }
 
     /// Create for file linking: also stores the link metadata (sourcePath/sourceBookmark).
-    /// Phase 1 stores the values only and leaves the sticker standalone (editable) (spec §4.1.1).
+    /// Phase 1 stores the values only and leaves the sticker standalone (editable).
     /// The content byte cap and count cap are enforced the same as the plain add.
     public func add(content: String, sourcePath: String?, sourceBookmark: Data?,
                     sourceModifiedDate: Date? = nil) -> Result<StickyNote, StickyStoreError> {
@@ -103,7 +103,7 @@ public final class StickyStore {
         save()
     }
 
-    /// Inline edit of standalone sticker content (spec §4.2.1).
+    /// Inline edit of standalone sticker content.
     /// - Validation: `.contentTooLarge` when it exceeds `maxContentBytes`
     /// - id missing: `.noteNotFound` (unlike the no-op of the existing commit* family, this reports the save failure)
     /// - Thread: main thread only (store contract)
@@ -191,7 +191,7 @@ public final class StickyStore {
         do {
             container = try JSONDecoder().decode(Container.self, from: data)
         } catch {
-            NSLog("StickyStore: restore 실패 (컨테이너 디코드) — %@", "\(error)")  // §7 no silent failure
+            NSLog("StickyStore: restore 실패 (컨테이너 디코드) — %@", "\(error)")  // no silent failure
             return none
         }
         // Migration boundary: don't load an unsupported version (overwriting with v1 would downgrade and lose data).
@@ -203,12 +203,12 @@ public final class StickyStore {
         // can't cause a flood or render freeze, drop notes over the content byte limit and clamp the count to maxStickies.
         // (re-review MAJOR: closes the gap where restore rendered >1MB notes unguarded, from the old 24MB cap era.)
         // Corrupt items (compactMap nil) are already silently removed by FailableNote isolation. The drop tally here
-        // counts only size/count overflow (what the user should be told, §7). The caller uses the tally for the notice.
+        // counts only size/count overflow (what the user should be told). The caller uses the tally for the notice.
         let decoded = container.notes.compactMap(\.note)
         let withinSize = decoded.filter { $0.content.utf8.count <= Self.maxContentBytes }
         let clamped = Array(withinSize.prefix(Self.maxStickies))
         notes = clamped
-        // syncedHash seeding (spec §8.1): for a linked note with no baseline (a Phase 1 save), adopt the sticker
+        // syncedHash seeding: for a linked note with no baseline (a Phase 1 save), adopt the sticker
         // content as the baseline. Without it, the first external change gives a spurious banner and ⬆️ detection is undefined (regression).
         var seeded = false
         for i in notes.indices where notes[i].sourcePath != nil && notes[i].syncedHash == nil {
@@ -233,7 +233,7 @@ public final class StickyStore {
             let data = try JSONEncoder().encode(container)
             defaults.set(data, forKey: Self.storageKey)
         } catch {
-            NSLog("StickyStore: save 실패 (인코드) — %@", "\(error)")  // §7 no silent failure
+            NSLog("StickyStore: save 실패 (인코드) — %@", "\(error)")  // no silent failure
         }
     }
 

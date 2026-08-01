@@ -6,7 +6,7 @@ import StickyCastCore
 /// Threading contract: main-thread only (same as StickyStore: UI callbacks and URL handlers all run on main).
 final class StickyPanelController: NSObject, NSWindowDelegate {
     let noteID: UUID
-    let vm: StickyViewModel                 // reactive view state, updated by Live Sync (§4.5)
+    let vm: StickyViewModel                 // reactive view state, updated by Live Sync
     private let panel: StickyPanel
     private let store: StickyStore
     private let onClosed: (UUID) -> Void
@@ -38,7 +38,7 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
             initialOpacity: note.opacity,
             initialPinned: note.pinned == true,
             onClose: { [weak self] in self?.close() },
-            onTogglePin: { [weak self] pinned in         // genuine pin wiring (dual-review iter-004 #1): Task 6 adds initial apply at creation
+            onTogglePin: { [weak self] pinned in         // genuine pin wiring; initial apply happens at creation
                 guard let self else { return }
                 self.store.setPinned(id: self.noteID, pinned: pinned)
                 self.panel.applyPinned(pinned)
@@ -51,7 +51,7 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
                 self.store.commitOpacity(id: self.noteID, opacity: v)
             },
             // inline-edit save (S1). Phase 1 allows editing on every sticker; read-only is Phase 2.
-            // returns success: on failure (over 1MB) the view keeps editing and we notify the user here (§7 no silent failures).
+            // returns success: on failure (over 1MB) the view keeps editing and we notify the user here (no silent failures).
             onContentChange: { [weak self] newContent in
                 guard let self else { return false }
                 switch self.store.updateContent(id: self.noteID, content: newContent) {
@@ -83,14 +83,14 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
             onRevealInFinder: isLinked ? { [weak self] in guard let self else { return }; onReveal(self.noteID) } : nil,
             onOpenInEditor: isLinked ? { [weak self] in guard let self else { return }; onOpenEditor(self.noteID) } : nil
         ))
-        // apply the saved pin state to the window level on restore/create (dual-review iter-003: applyPinned is required on restore)
+        // apply the saved pin state to the window level on restore/create (applyPinned is required on restore)
         panel.applyPinned(note.pinned == true)
     }
 
     deinit { moveDebounce?.invalidate() }
 
-    /// if the move debounce still has a pending commit, commit it now (avoids losing the final position at app quit, iter-009).
-    /// Task 10's applicationWillTerminate calls this on every controller.
+    /// if the move debounce still has a pending commit, commit it now (avoids losing the final position at app quit).
+    /// applicationWillTerminate calls this on every controller.
     func flushPendingMove() {
         guard moveDebounce != nil else { return }
         moveDebounce?.invalidate()
@@ -103,9 +103,9 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
     var isVisible: Bool { panel.isVisible }   // false after orderOut. Lets menu labels derive from actual visibility.
     func bringToFront() { panel.orderFrontRegardless() }
 
-    /// §5.3 "bring forward + emphasize": a flash that briefly drops alpha then restores it.
+    /// "bring forward + emphasize": a flash that briefly drops alpha then restores it.
     /// the restore baseline is committedOpacity (the committed value), not panel.alphaValue (transient):
-    /// this stops a restore to the wrong value during re-entry or slider drags (iter-009).
+    /// this stops a restore to the wrong value during re-entry or slider drags.
     func bringToFrontHighlighted() {
         panel.orderFrontRegardless()
         guard !isFlashing else { return }   // ignore re-entry while one is in flight
@@ -133,10 +133,10 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
         onClosed(noteID)
     }
 
-    // MARK: NSWindowDelegate: continuous gestures save only at the end (§5.2)
+    // MARK: NSWindowDelegate: continuous gestures save only at the end
     // AppKit has no "drag ended" notification, and windowDidMove fires repeatedly during a drag.
     // the Timer runs in .default runloop mode, so it doesn't fire mid-drag (.eventTracking), only after
-    // mouseUp = a gesture-end commit (iter-009 verified). In .common mode it would fire mid-drag and violate §5.2.
+    // mouseUp = a gesture-end commit. In .common mode it would fire mid-drag and violate the save-at-end rule.
     func windowDidMove(_ notification: Notification) {
         moveDebounce?.invalidate()
         moveDebounce = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in

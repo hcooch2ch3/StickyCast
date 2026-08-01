@@ -1,13 +1,13 @@
 import Foundation
 
-/// File watcher that survives atomic saves (temp+rename). Formalizes the S2 spike, spec §4.
+/// File watcher that survives atomic saves (temp+rename). Formalizes the S2 spike.
 /// File fd DispatchSource, plus debounce then path recheck and re-arm on rename/delete.
 /// Holds the security-scoped URL for the fd's whole lifetime (N1). Near-no-op unsandboxed, but the structure is there.
 /// Thread contract: callbacks on the main queue. The caller (controller) is on main. Pure Foundation, so it lives in Core and gets unit tested.
 public final class FileWatcher {
     private struct Watch { let source: DispatchSourceFileSystemObject; let scopedURL: URL; let accessing: Bool }
     private var watches: [UUID: Watch] = [:]
-    // Holds the in-flight debounce re-arm so it can be cancelled (Finding #1): teardown/unwatch must
+    // Holds the in-flight debounce re-arm so it can be cancelled: teardown/unwatch must
     // invalidate a scheduled re-arm, or detach/delete leaves a zombie watch revived, an fd leak, and a spurious dialog.
     private var rearmWork: [UUID: DispatchWorkItem] = [:]
 
@@ -34,7 +34,7 @@ public final class FileWatcher {
     private func handle(noteID: UUID, url: URL, flags: DispatchSource.FileSystemEvent, onChange: @escaping () -> Void) {
         if flags.contains(.write) || flags.contains(.extend) { onChange() }
         if flags.contains(.delete) || flags.contains(.rename) {
-            // atomic swap/rename: the current fd is stale, so stop-old atomically and re-arm after a debounce (§4).
+            // atomic swap/rename: the current fd is stale, so stop-old atomically and re-arm after a debounce.
             // teardown cancels the prior schedule, so even a rapid rename leaves only the latest single schedule.
             teardown(noteID: noteID)
             let work = DispatchWorkItem { [weak self] in
@@ -44,7 +44,7 @@ public final class FileWatcher {
                     self.arm(noteID: noteID, url: url, onChange: onChange)
                     onChange()   // re-arm = notify the decision logic of a file change (one unified "re-evaluate" ping)
                 } else {
-                    onChange()   // real delete: the decision logic (§7) rechecks, then handles the deletion
+                    onChange()   // real delete: the decision logic rechecks, then handles the deletion
                 }
             }
             rearmWork[noteID] = work
@@ -56,11 +56,11 @@ public final class FileWatcher {
 
     public func unwatch(noteID: UUID) { teardown(noteID: noteID) }
     // Snapshot to avoid mutation while iterating. Union in rearmWork.keys too: a note just after a rename
-    // (absent from watches but present in rearmWork) is mid-rearm and must also be cancelled, or the teardown path revives a zombie watch (dual-review round 2).
+    // (absent from watches but present in rearmWork) is mid-rearm and must also be cancelled, or the teardown path revives a zombie watch.
     public func unwatchAll() { Set(watches.keys).union(rearmWork.keys).forEach { teardown(noteID: $0) } }
 
     private func teardown(noteID: UUID) {
-        rearmWork[noteID]?.cancel()   // invalidate the in-flight re-arm schedule (Finding #1): must run even when there's no watch
+        rearmWork[noteID]?.cancel()   // invalidate the in-flight re-arm schedule: must run even when there's no watch
         rearmWork[noteID] = nil
         guard let w = watches.removeValue(forKey: noteID) else { return }
         w.source.cancel()

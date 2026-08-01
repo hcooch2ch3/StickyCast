@@ -5,7 +5,7 @@ import { MAX_CONTENT_BYTES } from "./limits";
 
 declare const MarkEdit: MarkEditAPI;
 
-// Derive the over-limit message from the constant so the size never gets hardcoded again (iter review).
+// Derive the over-limit message from the constant so the size never gets hardcoded again.
 const MAX_MB = Math.round(MAX_CONTENT_BYTES / (1024 * 1024));
 
 // Idempotent registration guard: MarkEdit loads the extension script once per webview context, so the
@@ -31,7 +31,7 @@ if (!g.__stickyCastRegistered) {
         return;
       }
 
-      // Over the content limit (raw bytes): reject and warn instead of truncating (§7 no silent failure, no truncation).
+      // Over the content limit (raw bytes): reject and warn instead of truncating (no silent failure, no truncation).
       const url = buildStickyURL(content, MAX_CONTENT_BYTES);
       if (url === null) {
         void MarkEdit.showAlert({

@@ -2,7 +2,7 @@ import SwiftUI
 import MarkdownUI
 
 struct StickyContentView: View {
-    @ObservedObject var vm: StickyViewModel     // reactive content, banner, edit state (§4.5)
+    @ObservedObject var vm: StickyViewModel     // reactive content, banner, edit state
     let initialOpacity: Double
     let initialPinned: Bool
     let onClose: () -> Void
@@ -23,7 +23,7 @@ struct StickyContentView: View {
     @State private var pinned: Bool
     // inline editing (S1 spike: verify TextEditor key input in a nonactivating panel)
     @State private var isEditing = false
-    // read-mode render source is vm.content (reactive). When Live Sync updates vm.content it re-renders at once (§4.5).
+    // read-mode render source is vm.content (reactive). When Live Sync updates vm.content it re-renders at once.
     @State private var draft: String = ""
     @FocusState private var editorFocused: Bool
     // instant feedback on "save to source": green check on success, red X on failure, reverts after ~1.2s
@@ -71,14 +71,14 @@ struct StickyContentView: View {
         guard onContentChange != nil else { return }   // editing-disabled sticker
         draft = vm.content
         isEditing = true
-        vm.setEditing(true)   // makes Live Sync treat this as dirty (§2 prevents clobbering uncommitted edits)
+        vm.setEditing(true)   // makes Live Sync treat this as dirty (prevents clobbering uncommitted edits)
         // focus after TextEditor mounts: setting it on the same tick can be a no-op because
-        // the field isn't in the view tree yet (review Major: prevents focus failure on first entry).
+        // the field isn't in the view tree yet (prevents focus failure on first entry).
         DispatchQueue.main.async { editorFocused = true }
     }
     private func commitEdit() {
         // on save failure (e.g. over 1MB), stay in edit mode and don't update vm.content (controller shows the error).
-        // §7 no silent failures: don't let an edit vanish without a trace.
+        // no silent failures: don't let an edit vanish without a trace.
         let ok = onContentChange?(draft) ?? true
         guard ok else { return }
         vm.content = draft
@@ -187,7 +187,7 @@ struct StickyContentView: View {
                 .frame(width: 70)
                 .accessibilityLabel("투명도")
 
-                // edit button: editable stickers only (onContentChange != nil). Alternate entry point to double-click (spec §3.2.1)
+                // edit button: editable stickers only (onContentChange != nil). Alternate entry point to double-click
                 if onContentChange != nil, !isEditing {
                     Button(action: beginEdit) {
                         Image(systemName: "pencil").imageScale(.medium)
@@ -230,7 +230,7 @@ struct StickyContentView: View {
             .padding(.horizontal, 8).padding(.vertical, 5)
             .background(.thinMaterial.opacity(hovering ? 1.0 : 0.55))
 
-            // conflict banner: shown when both sides changed (§3.1). Sits above the edit UI (edits kept). Default is to ignore = non-destructive.
+            // conflict banner: shown when both sides changed. Sits above the edit UI (edits kept). Default is to ignore = non-destructive.
             if vm.syncBanner == .conflict {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
@@ -243,7 +243,7 @@ struct StickyContentView: View {
                 .padding(.horizontal, 8).padding(.vertical, 5)
                 .background(Color.yellow.opacity(0.18))
             }
-            // file-oversize indicator: persistent (not a repeating toast, §8.2)
+            // file-oversize indicator: persistent (not a repeating toast)
             if vm.oversize {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.circle").foregroundStyle(.red)
@@ -279,7 +279,7 @@ struct StickyContentView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .contentShape(Rectangle())
-                .onTapGesture(count: 2, perform: beginEdit)   // double-click → edit (spec §3.2.1)
+                .onTapGesture(count: 2, perform: beginEdit)   // double-click → edit
             }
         }
         .background(RoundedRectangle(cornerRadius: 10)
@@ -287,7 +287,7 @@ struct StickyContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10))
         // with a color (light pastel), force the light appearance so text stays black and chrome stays consistently light. Default keeps the system appearance.
         .environment(\.colorScheme, colorKey != nil ? .light : systemColorScheme)
-        .overlay(alignment: .top) {   // auto-sync flash (§4.5 autoSyncPulse)
+        .overlay(alignment: .top) {   // auto-sync flash (autoSyncPulse)
             Rectangle().fill(Color.accentColor).frame(height: 2)
                 .opacity(pulseVisible ? 1 : 0)
         }

@@ -2,7 +2,7 @@ import XCTest
 @testable import StickyCastCore
 
 final class StickyURLParserTests: XCTestCase {
-    // Shared golden vectors (docs/url-scheme-spec.md), all 3
+    // Shared golden vectors, all 3
     func testGoldenVector_KoreanEmoji() {
         let url = URL(string: "sticky://new?content=7JWI64WV8J-OiQ")!
         XCTAssertEqual(StickyURLParser.parse(url), .success("안녕🎉"))
@@ -46,7 +46,7 @@ final class StickyURLParserTests: XCTestCase {
         XCTAssertEqual(StickyURLParser.parse(URL(string: "sticky://new?content=aGk&content=YWI")!), .failure(.missingContent))
     }
 
-    // scheme (iter-007 regression)
+    // scheme regression
     func testNonStickySchemeRejected() {
         XCTAssertEqual(StickyURLParser.parse(URL(string: "http://new?content=aGk")!), .failure(.unknownHost))
         XCTAssertEqual(StickyURLParser.parse(URL(string: "evil://new?content=aGk")!), .failure(.unknownHost))

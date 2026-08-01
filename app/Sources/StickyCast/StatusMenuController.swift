@@ -1,7 +1,7 @@
 import AppKit
 import StickyCastCore
 
-/// menu-bar icon: the only always-on entry point for an LSUIElement app (§5.3)
+/// menu-bar icon: the only always-on entry point for an LSUIElement app
 final class StatusMenuController: NSObject, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private unowned let appDelegate: AppDelegate
@@ -17,7 +17,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         installFileDrop()
     }
 
-    /// drop a .md onto the menu-bar icon → open it as a sticker (§5, Task 12). Attaches a drop-target view filling the button.
+    /// drop a .md onto the menu-bar icon → open it as a sticker. Attaches a drop-target view filling the button.
     private func installFileDrop() {
         guard let button = statusItem.button else { return }
         let drop = FileDropView { [weak self] urls in self?.appDelegate.openDroppedFiles(urls) }
@@ -36,7 +36,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         statusItem.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "StickyCast")
     }
 
-    /// §7 fallback: notifications may not show (permission denied, etc.), so on error swap the icon to a badge
+    /// fallback: notifications may not show (permission denied, etc.), so on error swap the icon to a badge
     /// so the user sees something went wrong without opening the menu. Cleared when the menu opens (= the error is visible at top).
     func indicateError() {
         setIcon(error: true)
@@ -47,7 +47,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         setIcon(error: false)
         menu.removeAllItems()
 
-        // §7: recent errors go at the very top so the user sees them before anything else (iter-011)
+        // recent errors go at the very top so the user sees them before anything else
         if !appDelegate.recentErrors.isEmpty {
             menu.addItem(withTitle: "⚠︎ 최근 오류", action: nil, keyEquivalent: "")
             for err in appDelegate.recentErrors {
@@ -118,7 +118,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     @objc private func bringNoteToFront(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? UUID else { return }
-        appDelegate.controllers[id]?.bringToFrontHighlighted()  // §5.3 "bring forward + emphasize"
+        appDelegate.controllers[id]?.bringToFrontHighlighted()  // "bring forward + emphasize"
     }
     @objc private func newFromClipboard() { appDelegate.createStickyFromClipboard() }
     @objc private func openFile() { appDelegate.openMarkdownFile() }

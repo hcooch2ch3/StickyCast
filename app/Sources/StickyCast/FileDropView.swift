@@ -1,6 +1,6 @@
 import AppKit
 
-/// Drop target that opens `.md`/`.markdown` files dropped on the menu bar icon as stickers (§5, Task 12).
+/// Drop target that opens `.md`/`.markdown` files dropped on the menu bar icon as stickers.
 ///
 /// Sits over `statusItem.button` and receives drops only. Mouse clicks (opening the menu) pass through
 /// to the button below via the default responder chain, with no extra override (drop reception confirmed in the S3 spike; clicks verified manually).
@@ -18,7 +18,7 @@ final class FileDropView: NSView {
 
     // Let mouse events pass through this view so the statusItem.button below (opening the menu) receives them.
     // Drop-destination registration (registerForDraggedTypes) goes through the dragging-destination path, which
-    // doesn't use hitTest, so drops are still received even when this returns nil → click pass-through is guaranteed regardless of macOS version (dual-review round 2).
+    // doesn't use hitTest, so drops are still received even when this returns nil → click pass-through is guaranteed regardless of macOS version.
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {

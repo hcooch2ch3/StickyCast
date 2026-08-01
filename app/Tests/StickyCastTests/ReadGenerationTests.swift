@@ -1,7 +1,7 @@
 import XCTest
 @testable import StickyCastCore
 
-/// Finding #2 regression: discard out-of-order completions of async file reads with latest-wins,
+/// Regression: discard out-of-order completions of async file reads with latest-wins,
 /// so a sticker cannot get stuck lagging behind the file.
 final class ReadGenerationTests: XCTestCase {
     func testStaleGenerationIsDroppedLatestWins() {

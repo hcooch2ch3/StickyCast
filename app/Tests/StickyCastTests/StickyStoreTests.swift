@@ -69,7 +69,7 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testUnsupportedSchemaVersionNotLoaded() {
-        // schemaVersion 2 → skip restore (prevents downgrade and data loss, iter-008)
+        // schemaVersion 2 → skip restore (prevents downgrade and data loss)
         let future = """
         {"schemaVersion":2,"notes":[
           {"id":"11111111-1111-1111-1111-111111111111","content":"future",
@@ -83,7 +83,7 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testRestoreIsolatesCorruptItems_badThenGood() {
-        // a corrupt item first still lets a later valid item survive (order-independent, iter-008)
+        // a corrupt item first still lets a later valid item survive (order-independent)
         let json = """
         {"schemaVersion":1,"notes":[
           {"id":"not-a-uuid","content":123},
@@ -142,7 +142,7 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testRestoreClampsToCap() {
-        // An over-cap saved state (35 notes) is normalized to maxStickies on restore (iter-010)
+        // An over-cap saved state (35 notes) is normalized to maxStickies on restore
         var notesJSON: [String] = []
         for i in 0..<35 {
             let uuid = String(format: "%08d-0000-0000-0000-000000000000", i)
@@ -156,7 +156,7 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testRestoreReportsDropCounts() {
-        // §7: report drop counts so the caller can notify the user about restore drops.
+        // report drop counts so the caller can notify the user about restore drops.
         // Setup: 2 oversize + 34 valid = 36 → withinSize 34; 4 over the cap (30) are clipped → restored 30.
         let big = String(repeating: "a", count: StickyStore.maxContentBytes + 100)
         var notesJSON: [String] = []
@@ -256,7 +256,7 @@ final class StickyStoreTests: XCTestCase {
         XCTAssertNil(s2.notes[0].syncedHash)
     }
 
-    // MARK: Live Sync, restore seeding (Task 4)
+    // MARK: Live Sync, restore seeding
 
     func testRestoreSeedsSyncedHashForLinkedNotes() {
         // Restoring a Phase 1 save (linked note, no syncedHash) seeds it from the content hash
@@ -281,7 +281,7 @@ final class StickyStoreTests: XCTestCase {
         XCTAssertNil(s2.notes[0].syncedHash)
     }
 
-    // MARK: Live Sync, store methods (Task 3)
+    // MARK: Live Sync, store methods
 
     func testDetachFromFileClearsAllLinkMeta() {
         let store = makeStore()
@@ -342,7 +342,7 @@ final class StickyStoreTests: XCTestCase {
         XCTAssertEqual(store2.notes[0].content, "keep")
     }
 
-    // MARK: inline editing (updateContent, spec §4.2.1)
+    // MARK: inline editing (updateContent)
 
     func testUpdateContentChangesAndPersists() {
         let store = makeStore()
@@ -365,7 +365,7 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testUpdateContentUnknownIdReturnsNotFound() {
-        // Existing mutators are no-ops, but updateContent must surface a failed edit save, so it errors (§4.2.1)
+        // Existing mutators are no-ops, but updateContent must surface a failed edit save, so it errors
         let store = makeStore()
         if case .failure(let e) = store.updateContent(id: UUID(), content: "x") {
             XCTAssertEqual(e, .noteNotFound)
