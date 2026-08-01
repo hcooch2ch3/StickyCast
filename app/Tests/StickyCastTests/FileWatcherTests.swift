@@ -54,4 +54,30 @@ final class FileWatcherTests: XCTestCase {
         w.unwatchAll()
         try? FileManager.default.removeItem(atPath: dir)
     }
+
+    // Fix #2 회귀(dual-review 2차): unwatchAll도 mid-rearm 노트(watches엔 없고 rearmWork엔 있는)를
+    // 취소해야 한다. rename 후 재-arm 창 안에서 unwatchAll 호출 시 이후 ping이 없어야 함.
+    func testUnwatchAllDuringRearmWindowCancelsPendingRearm() {
+        let dir = NSTemporaryDirectory() + "fwtest-\(UUID().uuidString)"
+        try! FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        let path = dir + "/n.md"
+        try! "v0".write(toFile: path, atomically: false, encoding: .utf8)
+        let w = FileWatcher()
+        var unwatched = false
+        var pingsAfterUnwatch = 0
+        w.watch(noteID: UUID(), url: URL(fileURLWithPath: path)) { if unwatched { pingsAfterUnwatch += 1 } }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            let tmp = dir + "/.tmp"; try! "v1".write(toFile: tmp, atomically: false, encoding: .utf8)
+            rename(tmp, path)   // rename → +0.15s 재-arm 예약, 이 순간 watches에선 제거됨
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {   // 재-arm 창 안
+            unwatched = true
+            w.unwatchAll()
+        }
+        let done = expectation(description: "settle")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { done.fulfill() }
+        wait(for: [done], timeout: 3)
+        XCTAssertEqual(pingsAfterUnwatch, 0, "unwatchAll 후 mid-rearm ping이 발화하면 안 됨")
+        try? FileManager.default.removeItem(atPath: dir)
+    }
 }

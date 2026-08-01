@@ -55,7 +55,9 @@ public final class FileWatcher {
     }
 
     public func unwatch(noteID: UUID) { teardown(noteID: noteID) }
-    public func unwatchAll() { Array(watches.keys).forEach { teardown(noteID: $0) } }   // 스냅샷 — 반복 중 변형 방지
+    // 스냅샷 — 반복 중 변형 방지. rearmWork.keys도 합집합: rename 직후(watches엔 없고 rearmWork엔 있는)
+    // mid-rearm 노트도 취소해야 종료 경로에서 좀비 감시 부활을 막는다 (dual-review 2차).
+    public func unwatchAll() { Set(watches.keys).union(rearmWork.keys).forEach { teardown(noteID: $0) } }
 
     private func teardown(noteID: UUID) {
         rearmWork[noteID]?.cancel()   // 진행 중 재-arm 예약 무효화(Finding #1) — watch 없어도 실행돼야 함

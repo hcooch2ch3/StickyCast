@@ -211,9 +211,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let note = store.notes.first(where: { $0.id == id }),
               let controller = controllers[id],
               let url = resolveSourceURL(note: note) else { return }
+        // 세대 편입(dual-review 2차): begin으로 비행 중인 오래된 자동 읽기를 무효화하고, take 자신도
+        // latest-wins에 편입 — 이래야 뒤늦게 도착한 stale 자동 읽기가 유저의 "파일 가져오기"를 안 덮는다.
+        let gen = readGen.begin(id)
         readLinkedFile(url) { [weak self] result in
             guard let self else { return }
-            defer { controller.vm.syncBanner = nil }
+            defer { controller.vm.syncBanner = nil }   // 유저 명시 동작 — 배너는 항상 해제
+            guard self.readGen.isCurrent(id, gen) else { return }   // 더 최신 읽기가 이김 → stale take 폐기
             guard let result else { return }   // 읽기 실패 시 배너만 닫고 no-op
             switch self.store.applyFileSync(id: id, content: result.content, hash: result.hash) {
             case .success:
