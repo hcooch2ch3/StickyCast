@@ -4,6 +4,8 @@
 
 Pop selected Markdown from MarkEdit onto your macOS desktop as a floating sticky note.
 
+![StickyCast stickies on the desktop](assets/hero.png)
+
 It has two parts:
 
 - The **MarkEdit extension** (`extension/`) sends the current selection through a `sticky://` URL scheme.

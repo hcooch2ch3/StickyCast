@@ -4,6 +4,8 @@
 
 MarkEdit에서 선택한 마크다운을 macOS 데스크탑에 **플로팅 스티커**로 띄우는 도구.
 
+![데스크탑에 띄운 StickyCast 스티커](assets/hero.png)
+
 두 컴포넌트로 구성됩니다:
 
 - **MarkEdit 확장**(`extension/`)은 에디터에서 선택한 마크다운을 `sticky://` URL 스킴으로 발사합니다.
