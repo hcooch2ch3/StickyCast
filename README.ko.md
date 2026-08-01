@@ -9,7 +9,7 @@ MarkEdit에서 선택한 마크다운을 macOS 데스크탑에 **플로팅 스�
 - **MarkEdit 확장**(`extension/`)은 에디터에서 선택한 마크다운을 `sticky://` URL 스킴으로 발사합니다.
 - **컴패니언 앱 StickyCast**(`app/`)는 URL을 받아 데스크탑에 반투명 스티커 창으로 표시합니다(📌로 고정한 것만 항상 위).
 
-두 컴포넌트는 커스텀 URL 스킴 하나(`sticky://`)로만 연결되는 느슨한 결합입니다. 계약은 [`docs/url-scheme-spec.md`](docs/url-scheme-spec.md).
+두 컴포넌트는 커스텀 URL 스킴 하나(`sticky://`)로만 연결되는 느슨한 결합입니다.
 
 ## 요구사항
 
@@ -70,8 +70,6 @@ MarkEdit을 재시작하면 **Extensions ▸ Pop as Sticky** 메뉴가 나타납
 cd app && swift test          # 코어 로직 단위 테스트 (파서, 스토어)
 cd extension && npm test      # 인코딩 단위 테스트
 ```
-
-설계 배경과 검증 이력은 [`docs/`](docs/)를 참고하세요 (`url-scheme-spec.md`, `preflight-results.md`, `markedit-api-notes.md`, `e2e-checklist.md`).
 
 ## 라이선스와 크레딧
 

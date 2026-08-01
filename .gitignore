@@ -9,7 +9,7 @@ extension/dist/
 .omx/
 **/.omx/
 .superpowers/
-docs/superpowers/
+docs/
 .omx-*/
 
 # macOS / 로컬 작업 파일 (공개 리포에 미포함)

@@ -9,7 +9,7 @@ It has two parts:
 - The **MarkEdit extension** (`extension/`) sends the current selection through a `sticky://` URL scheme.
 - The **StickyCast companion app** (`app/`) catches that URL and draws it as a translucent sticky window. Only notes you pin with 📌 stay above other windows.
 
-The two are coupled by exactly one thing: the custom `sticky://` URL scheme. The contract lives in [`docs/url-scheme-spec.md`](docs/url-scheme-spec.md).
+The two are coupled by exactly one thing: the custom `sticky://` URL scheme.
 
 ## Requirements
 
@@ -70,8 +70,6 @@ The menu bar icon gives you the sticky list, **Hide all / Show all** (stash and 
 cd app && swift test          # unit tests for the core logic (parser, store)
 cd extension && npm test      # unit tests for encoding
 ```
-
-For the design rationale and validation history, see [`docs/`](docs/): `url-scheme-spec.md`, `preflight-results.md`, `markedit-api-notes.md`, and `e2e-checklist.md`.
 
 ## License and credits
 
