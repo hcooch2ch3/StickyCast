@@ -46,25 +46,32 @@ Restart MarkEdit and you'll find **Extensions ▸ Pop as Sticky**.
 
 ## Using it
 
-1. Select some Markdown in MarkEdit.
-2. Click **Extensions ▸ Pop as Sticky**.
-3. The selection appears as a sticky in the top-right of your screen.
+Three ways to make a sticky:
 
-Every sticky has a top bar with 📌 (pin), ⋯ (drag handle), and ✕ (close), plus an opacity slider along the bottom that darkens when you hover. Drag the body to move it; drag an edge to resize.
+- **From MarkEdit**: select some Markdown, then **Extensions ▸ Pop as Sticky**.
+- **From the clipboard**: menu bar icon ▸ **Sticky from clipboard**.
+- **From a file**: menu bar icon ▸ **Open Markdown file…**, or drag a `.md` onto the menu bar icon. A sticky opened from a file stays linked to it (see below).
+
+Each sticky has a top bar that darkens on hover: **✕** close (this deletes it), **📌** pin, **🎨** color (yellow, pink, blue, green, purple), an **opacity** slider, and **✏️** edit. Drag the body to move it; drag an edge to resize.
 
 - **Unpinned stickies** drop behind whatever you switch to, so they never cover your work.
-- **Pinned stickies** (📌) stay on top, in view while you work.
-- **✕ deletes** the sticky.
+- **Pinned stickies** (📌) stay on top while you work.
 
-Position, size, opacity, and pin state are saved and restored across restarts.
+Position, size, opacity, pin state, and color are saved and restored across restarts. The menu bar icon also holds the sticky list, **Hide all / Show all** (stash and bring back, not delete), All to front, Export sticky, Close all, recent errors, About, and Quit.
 
-The menu bar icon gives you the sticky list, **Hide all / Show all** (stash and bring back, not delete), All to front, Close all, recent errors, About StickyCast, and Quit.
+## Editing and Live Sync
 
-## Limits (v1)
+- **Edit in place**: double-click the body or click **✏️**. **⌘Return** saves, **Esc** cancels.
+- A sticky opened from a `.md` file is **linked** to it and gains two controls:
+  - **⬆️** writes your edits back to the file, asking first if the file changed outside StickyCast.
+  - **🔗** reveals the file in Finder, opens it in your editor, or detaches it (keeps the content, drops the link).
+- **Live Sync**: edit the linked file in any editor and the sticky updates on its own. If both sides changed, a banner lets you **take the file** or **keep your edit**. Nothing is overwritten without your say.
+- **Export**: menu bar icon ▸ **Export sticky** saves a sticky as a `.md` file.
 
-- Viewer only. You can't edit a sticky or save it to a file.
-- Up to 30 stickies, with a content cap of about 1 MB of source (enough for essentially any Markdown document). Anything larger is refused with a notice rather than silently truncated.
-- Renders standard GFM only.
+## Limits
+
+- Up to 30 stickies, each capped at about 1 MB of content (enough for essentially any Markdown document). Anything larger is refused with a notice rather than truncated.
+- Renders standard GFM.
 
 ## Development
 
