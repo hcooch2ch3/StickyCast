@@ -5,52 +5,52 @@ import StickyCastCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var store: StickyStore!
-    private(set) var controllers: [UUID: StickyPanelController] = [:]  // 강한 참조 — 놓으면 패널이 사라짐 (iter-009)
-    private(set) var recentErrors: [String] = []  // 메뉴바 "최근 오류" (Task 11)
+    private(set) var controllers: [UUID: StickyPanelController] = [:]  // strong reference; drop it and the panel disappears (iter-009)
+    private(set) var recentErrors: [String] = []  // menu bar "최근 오류" (Task 11)
     private var statusMenu: StatusMenuController!
-    let fileWatcher = FileWatcher()               // Live Sync — 연결 스티커 파일 감시 (§4)
-    private var suppressedNotes: Set<UUID> = []   // ⬆️ 저장 직후 self-write 억제 (§3.2, Task 11)
-    private let readGen = ReadGeneration()        // 파일 읽기 out-of-order 완료 폐기 — latest-wins (Finding #2)
+    let fileWatcher = FileWatcher()               // Live Sync: watch linked sticker files (§4)
+    private var suppressedNotes: Set<UUID> = []   // ⬆️ suppress the self-write right after saving (§3.2, Task 11)
+    private let readGen = ReadGeneration()        // discard out-of-order file-read completions: latest-wins (Finding #2)
 
-    // "모두 숨기기/보이기" 토글 라벨은 별도 상태 bool이 아니라 실제 창 가시성에서 파생한다
-    // (dual-review iter-006: 전역 bool은 per-window 상태와 어긋나 라벨이 거짓말함).
+    // The "hide/show all" toggle label derives from actual window visibility, not a separate state bool
+    // (dual-review iter-006: a global bool drifts from per-window state and the label lies).
     var anyStickerVisible: Bool { controllers.values.contains { $0.isVisible } }
 
-    // 파싱 前 값싼 URL 길이 상한 (비정상적으로 큰 URL을 디코드 前에 컷). 정확한 콘텐츠 바이트 한도는
-    // StickyStore.maxContentBytes 단일 소스가 add()/restore() 양쪽에서 강제한다 (재리뷰: 상수 통합·restore 갭).
+    // Cheap URL length cap before parsing (cut abnormally large URLs before decoding). The exact content byte
+    // limit is enforced from a single source, StickyStore.maxContentBytes, on both add() and restore() (re-review: unify the constant, close the restore gap).
     private let maxReceivedURLLength = 2 * 1024 * 1024
 
-    // launch 완료 전 도착한 URL 큐 (store nil 크래시 방지, iter-010). 정상 경로에선 비지만 순서 불변식을 강제.
+    // Queue for URLs that arrive before launch finishes (prevents a store-nil crash, iter-010). Empty on the normal path, but it enforces the ordering invariant.
     private var pendingURLs: [URL] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let screen = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
         store = StickyStore(defaults: .standard, screenFrame: screen)
 
-        // 메뉴바를 URL 처리보다 먼저 세워, 이후 reportError의 배지 표시가 유효하도록 (iter-010 §7 폴백)
+        // Stand up the menu bar before handling URLs so reportError's badge display is valid afterward (iter-010 §7 fallback)
         statusMenu = StatusMenuController(appDelegate: self)
 
-        // 알림 권한: 첫 실행 시 요청 (§7 — 첫 에러 시점 요청은 그 에러를 증발시킴)
+        // Notification permission: request on first launch (§7: requesting at the first error would swallow that error)
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { _, _ in }
 
         verifySchemeHandler()
 
         restoreStickies()
 
-        // launch 전 큐잉된 URL 처리
+        // Handle URLs queued before launch
         let queued = pendingURLs
         pendingURLs = []
         queued.forEach(handle(url:))
     }
 
-    // 앱 종료 시 pending 이동 커밋 flush — 디바운스 창(300ms)에서 종료 시 최종 위치 유실 방지 (iter-009)
+    // On app quit, flush pending move commits to avoid losing the final position if we quit inside the debounce window (300ms) (iter-009)
     func applicationWillTerminate(_ notification: Notification) {
         controllers.values.forEach { $0.flushPendingMove() }
-        fileWatcher.unwatchAll()   // Live Sync 감시 정리(§4)
+        fileWatcher.unwatchAll()   // clean up Live Sync watches (§4)
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
-        // store가 아직 없으면(launch 전) 큐잉 후 launch에서 처리 (iter-010)
+        // If the store isn't up yet (before launch), queue and handle at launch (iter-010)
         guard store != nil else {
             pendingURLs.append(contentsOf: urls)
             return
@@ -59,15 +59,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handle(url: URL) {
-        // 파싱 前 값싼 URL 길이 컷 (거대 URL을 디코드 前에 차단, 바이트 기준). 정확한 콘텐츠 한도는 store.add()가 강제.
-        // .utf8.count로 바이트 판정 — 멀티바이트 다수인 rogue URL이 grapheme 수 과소계수로 컷을 우회하지 못하게.
+        // Cheap URL length cut before parsing (block huge URLs before decoding, by byte count). The exact content limit is enforced by store.add().
+        // Measure bytes with .utf8.count so a rogue URL full of multibyte chars can't dodge the cut by undercounting via grapheme count.
         guard url.absoluteString.utf8.count <= maxReceivedURLLength else {
             reportError("스티커 내용이 너무 큽니다.")
             return
         }
         switch StickyURLParser.parse(url) {
         case .success(let content):
-            createSticky(content: content)   // 콘텐츠 바이트 캡은 store.add()가 강제 (단일 소스)
+            createSticky(content: content)   // the content byte cap is enforced by store.add() (single source)
         case .failure(let error):
             reportError(errorMessage(for: error))
         }
@@ -76,13 +76,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func createSticky(content: String) {
         switch store.add(content: content) {
         case .success(let note):
-            addController(for: note)   // 새 스티커는 show()로 뜸 → anyStickerVisible이 자동으로 true
+            addController(for: note)   // a new sticker comes up via show() → anyStickerVisible becomes true automatically
         case .failure(.capReached):
             reportError("스티커가 최대 \(StickyStore.maxStickies)장입니다. 기존 스티커를 닫아 주세요.")
         case .failure(.contentTooLarge):
             reportError("스티커 내용이 너무 큽니다 (최대 약 \(StickyStore.maxContentBytes / (1024 * 1024))MB).")
         case .failure(.noteNotFound):
-            break   // add는 이 에러를 반환하지 않음 (스위치 망라용 방어)
+            break   // add never returns this error (defensive, to make the switch exhaustive)
         }
     }
 
@@ -91,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for note in store.notes {
             addController(for: note)
         }
-        // §7: 복원 시 노트를 버렸으면 조용히 넘어가지 않고 사용자에게 알린다 (수신 경로와 일관).
+        // §7: if restore dropped any notes, tell the user instead of failing silently (consistent with the receive path).
         guard outcome.hasDrops else { return }
         var parts: [String] = []
         if outcome.droppedOversize > 0 { parts.append("크기 초과 \(outcome.droppedOversize)개") }
@@ -103,7 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let controller = StickyPanelController(
             note: note, store: store,
             onClosed: { [weak self] id in
-                self?.fileWatcher.unwatch(noteID: id)   // 닫기 시 감시 정리(§4 누수 방지)
+                self?.fileWatcher.unwatch(noteID: id)   // clean up the watch on close (§4 leak prevention)
                 self?.controllers[id] = nil
             },
             onSaveToFile: { [weak self] id in self?.saveNoteToSourceFile(id: id) ?? false },
@@ -115,7 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         controllers[note.id] = controller
         controller.show()
-        // 연결 스티커면 Live Sync 감시 arm (§3/§4)
+        // If it's a linked sticker, arm the Live Sync watch (§3/§4)
         if note.sourcePath != nil, let url = resolveSourceURL(note: note) {
             fileWatcher.watch(noteID: note.id, url: url) { [weak self] in
                 self?.handleFileEvent(noteID: note.id)
@@ -123,26 +123,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// FileWatcher 이벤트 → off-main 읽기 → (dirty,file) 판정 → vm 갱신 (§3). 삭제/이동도 처리(§7).
+    /// FileWatcher event → off-main read → decide (dirty, file) → update vm (§3). Also handles delete/move (§7).
     private func handleFileEvent(noteID: UUID) {
-        if suppressedNotes.contains(noteID) { return }   // ⬆️ self-write 억제 창(§3.2)
+        if suppressedNotes.contains(noteID) { return }   // ⬆️ self-write suppression window (§3.2)
         guard let note = store.notes.first(where: { $0.id == noteID }),
               let controller = controllers[noteID] else { return }
-        // 이동 추적: bookmark로 현재 경로 resolve. 없거나 파일 부재면 삭제 처리(§7, debounce는 FileWatcher가 이미 수행).
+        // Move tracking: resolve the current path via bookmark. If there's none or the file is gone, treat it as a delete (§7; FileWatcher already debounced).
         guard let url = resolveSourceURL(note: note), FileManager.default.fileExists(atPath: url.path) else {
             handleDeletedFile(noteID: noteID)
             return
         }
-        // 경로가 바뀌었으면(동일 볼륨 이동) sourcePath·bookmark 갱신 + watcher 재-arm(§7)
+        // If the path changed (same-volume move), update sourcePath and bookmark, then re-arm the watcher (§7)
         if url.path != note.sourcePath {
             store.setSourcePath(id: noteID, path: url.path, bookmark: try? url.bookmarkData())
             fileWatcher.watch(noteID: noteID, url: url) { [weak self] in self?.handleFileEvent(noteID: noteID) }
         }
-        let gen = readGen.begin(noteID)   // 이 읽기의 세대 토큰 — 완료 시 최신인지 검사(Finding #2)
+        let gen = readGen.begin(noteID)   // generation token for this read; on completion, check it's still the latest (Finding #2)
         readLinkedFile(url) { [weak self] result in
             guard let self else { return }
-            guard self.readGen.isCurrent(noteID, gen) else { return }   // 더 최신 읽기가 뒤이어 시작됨 → 폐기(stale 고착 방지)
-            guard let result else { return }   // 읽기/decode 실패 → no-op(자동반영 금지, M2)
+            guard self.readGen.isCurrent(noteID, gen) else { return }   // a newer read started after this one → discard (avoid getting stuck on stale data)
+            guard let result else { return }   // read/decode failed → no-op (no auto-apply, M2)
             guard let note = self.store.notes.first(where: { $0.id == noteID }) else { return }
             let stickerHash = ContentHash.sha256Hex(note.content)
             switch decideSyncAction(stickerHash: stickerHash, fileHash: result.hash,
@@ -151,7 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 break
             case .converged:
                 self.store.setSyncedHash(id: noteID, hash: result.hash)
-                controller.vm.syncBanner = nil   // 파일과 동일 내용 수렴 → 떠있던 충돌 배너 해제 (Minor)
+                controller.vm.syncBanner = nil   // content converged with the file → clear any lingering conflict banner (Minor)
             case .autoApply:
                 switch self.store.applyFileSync(id: noteID, content: result.content, hash: result.hash) {
                 case .success:
@@ -159,7 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     controller.vm.oversize = false
                     controller.vm.autoSyncPulse.toggle()
                 case .failure(.contentTooLarge):
-                    controller.vm.oversize = true   // 지속 인디케이터(§8.2), 알림 폭풍 아님
+                    controller.vm.oversize = true   // persistent indicator (§8.2), not a notification storm
                 case .failure:
                     break
                 }
@@ -169,7 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// 연결 파일 삭제(debounce·resolve 후에도 부재) → "유지(독립 전환)/닫기" 다이얼로그 (§7).
+    /// Linked file deleted (still absent after debounce and resolve) → "keep (detach) / close" dialog (§7).
     private func handleDeletedFile(noteID: UUID) {
         guard let note = store.notes.first(where: { $0.id == noteID }) else { return }
         let name = (note.sourcePath as NSString?)?.lastPathComponent ?? "파일"
@@ -181,13 +181,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.addButton(withTitle: "닫기")
         NSApp.activate()
         if alert.runModal() == .alertFirstButtonReturn {
-            detachNote(id: noteID)          // 유지 → 독립 전환(내용 보존)
+            detachNote(id: noteID)          // keep → detach (content preserved)
         } else {
-            controllers[noteID]?.close()    // 닫기 → 제거 (close가 unwatch 경유)
+            controllers[noteID]?.close()    // close → remove (close goes through unwatch)
         }
     }
 
-    /// 연결 해제 — 감시 중단 + 링크 메타 제거(내용 보존) + vm 반영(🔗/⬆️ 숨김) (§6).
+    /// Detach: stop watching, remove link metadata (content preserved), reflect in vm (hide 🔗/⬆️) (§6).
     func detachNote(id: UUID) {
         fileWatcher.unwatch(noteID: id)
         store.detachFromFile(id: id)
@@ -195,30 +195,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controllers[id]?.vm.syncBanner = nil
         controllers[id]?.vm.oversize = false
     }
-    /// Finder에서 원본 보기 (§6).
+    /// Reveal the source in Finder (§6).
     func revealNoteInFinder(id: UUID) {
         guard let note = store.notes.first(where: { $0.id == id }), let url = resolveSourceURL(note: note) else { return }
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
-    /// 원본을 기본 편집기로 열기 — §2.1.1 "원본에서 편집" 경로 (§6).
+    /// Open the source in the default editor: §2.1.1 "edit in source" path (§6).
     func openNoteInEditor(id: UUID) {
         guard let note = store.notes.first(where: { $0.id == id }), let url = resolveSourceURL(note: note) else { return }
         NSWorkspace.shared.open(url)
     }
 
-    /// 충돌 배너 "파일 내용 가져오기" — 파일 버전을 강제로 로드(스티커 편집 폐기), 배너 해제 (§3.1).
+    /// Conflict banner "take file content": force-load the file version (discard sticker edits), clear the banner (§3.1).
     func takeFileForNote(id: UUID) {
         guard let note = store.notes.first(where: { $0.id == id }),
               let controller = controllers[id],
               let url = resolveSourceURL(note: note) else { return }
-        // 세대 편입(dual-review 2차): begin으로 비행 중인 오래된 자동 읽기를 무효화하고, take 자신도
-        // latest-wins에 편입 — 이래야 뒤늦게 도착한 stale 자동 읽기가 유저의 "파일 가져오기"를 안 덮는다.
+        // Join the generation scheme (dual-review round 2): begin invalidates in-flight stale auto-reads, and take itself
+        // joins latest-wins too, so a stale auto-read arriving late won't clobber the user's "take file".
         let gen = readGen.begin(id)
         readLinkedFile(url) { [weak self] result in
             guard let self else { return }
-            defer { controller.vm.syncBanner = nil }   // 유저 명시 동작 — 배너는 항상 해제
-            guard self.readGen.isCurrent(id, gen) else { return }   // 더 최신 읽기가 이김 → stale take 폐기
-            guard let result else { return }   // 읽기 실패 시 배너만 닫고 no-op
+            defer { controller.vm.syncBanner = nil }   // explicit user action: always clear the banner
+            guard self.readGen.isCurrent(id, gen) else { return }   // a newer read won → discard this stale take
+            guard let result else { return }   // on read failure, just close the banner and no-op
             switch self.store.applyFileSync(id: id, content: result.content, hash: result.hash) {
             case .success:
                 controller.vm.content = result.content
@@ -231,7 +231,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// 파일을 off-main UTF-8로 읽어 (내용, 해시)를 main으로 콜백. 실패 시 nil(자동반영 금지).
+    /// Read the file off-main as UTF-8 and call back on main with (content, hash). nil on failure (no auto-apply).
     func readLinkedFile(_ url: URL, completion: @escaping ((content: String, hash: String)?) -> Void) {
         DispatchQueue.global(qos: .utility).async {
             let result: (String, String)? = (try? String(contentsOf: url, encoding: .utf8))
@@ -240,42 +240,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// 모든 스티커를 화면에서 감춘다(비파괴 — 노트·컨트롤러 유지). 메뉴바에서 호출.
+    /// Hide all stickers from the screen (non-destructive: notes and controllers are kept). Called from the menu bar.
     func hideAllStickers() { controllers.values.forEach { $0.hide() } }
-    /// 감춘 스티커를 모두 다시 앞으로 띄운다.
+    /// Bring all hidden stickers back to the front.
     func showAllStickers() { controllers.values.forEach { $0.show() } }
 
-    // MARK: 편의 기능 Phase 1 — 클립보드 · 파일 열기 · 내보내기 (스펙 §3.1/§3.4)
+    // MARK: Convenience features Phase 1: clipboard, open file, export (spec §3.1/§3.4)
 
-    /// 클립보드 텍스트로 독립 스티커 생성. 메뉴바 "클립보드에서 스티커".
+    /// Create a standalone sticker from clipboard text. Menu bar "클립보드에서 스티커".
     func createStickyFromClipboard() {
         guard let raw = NSPasteboard.general.string(forType: .string),
               !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             reportError("클립보드에 붙여넣을 텍스트가 없습니다.")
             return
         }
-        createSticky(content: raw)   // 콘텐츠 바이트 캡은 store.add()가 강제 (단일 소스)
+        createSticky(content: raw)   // the content byte cap is enforced by store.add() (single source)
     }
 
-    /// NSOpenPanel로 .md 선택 → 내용을 스티커로. 링크 메타(sourcePath/bookmark)를 저장하되
-    /// Phase 1은 스티커를 독립(편집 가능)으로 둔다 (스펙 §4.1.1). 읽기전용·Live Sync는 Phase 2.
+    /// Pick a .md via NSOpenPanel → turn its content into a sticker. Store link metadata (sourcePath/bookmark), but
+    /// Phase 1 leaves the sticker standalone (editable) (spec §4.1.1). Read-only and Live Sync come in Phase 2.
     func openMarkdownFile() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
-        // .md / .markdown / 일반 텍스트 허용 (.txt는 마크다운 여부 불명확이나 텍스트로 열람 허용)
+        // Allow .md / .markdown / plain text (.txt isn't clearly markdown, but allow it for text viewing)
         var types: [UTType] = [.plainText]
         if let markdown = UTType(filenameExtension: "markdown") { types.insert(markdown, at: 0) }
         if let md = UTType(filenameExtension: "md") { types.insert(md, at: 0) }
         panel.allowedContentTypes = types
-        NSApp.activate()   // accessory(LSUIElement) 앱 — 패널을 앞으로 가져온다
+        NSApp.activate()   // accessory (LSUIElement) app: bring the panel to the front
         guard panel.runModal() == .OK, let url = panel.url else { return }
         reportOpenFailure(openFile(at: url), url.lastPathComponent)
     }
 
-    /// 메뉴바 아이콘에 드롭된 파일들 중 .md/.markdown만 스티커로 연다 (§5 드래그앤드롭, Task 12).
-    /// 뷰(FileDropView)가 이미 확장자 필터를 적용하지만, 진입점을 방어적으로 한 번 더 거른다.
+    /// Among files dropped on the menu bar icon, open only .md/.markdown as stickers (§5 drag-and-drop, Task 12).
+    /// The view (FileDropView) already applies an extension filter, but filter once more defensively at the entry point.
     func openDroppedFiles(_ urls: [URL]) {
         let exts: Set<String> = ["md", "markdown"]
         let mdURLs = urls.filter { exts.contains($0.pathExtension.lowercased()) }
@@ -283,7 +283,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             reportError("마크다운(.md/.markdown) 파일만 열 수 있습니다.")
             return
         }
-        // 복수 드롭: 파일당 알림 대신 실패를 유형별로 모아 최대 3건으로 집계 보고(dual-review 2차, 알림 폭풍 방지).
+        // Multi-drop: instead of one notification per file, group failures by type and report up to 3 aggregates (dual-review round 2, avoid a notification storm).
         var capHit = false
         var tooLarge: [String] = []
         var readFail: [String] = []
@@ -300,7 +300,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !readFail.isEmpty { reportError("읽을 수 없는 파일: \(readFail.joined(separator: ", "))") }
     }
 
-    /// openFile 결과 — 호출부가 보고 방식을 정한다(단일=즉시, 복수 드롭=집계).
+    /// openFile result: the caller decides how to report (single = immediate, multi-drop = aggregate).
     private enum OpenOutcome { case ok, readFailed, capReached, tooLarge }
 
     @discardableResult
@@ -311,13 +311,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             return .readFailed
         }
-        // Phase 1: 일반 bookmark 저장(비샌드박스에서 동작). Phase 2가 sandbox 전환 시
-        // security-scoped bookmark(.withSecurityScope)로 승격 + FileWatcher 연결 (스펙 §1.1/§4.3).
+        // Phase 1: store a plain bookmark (works outside the sandbox). When Phase 2 moves to the sandbox,
+        // promote to a security-scoped bookmark (.withSecurityScope) and wire up FileWatcher (spec §1.1/§4.3).
         let bookmark = try? url.bookmarkData()
         switch store.add(content: content, sourcePath: url.path, sourceBookmark: bookmark) {
         case .success(let note):
-            // open 시점 syncedHash 시딩(§8.1 세 시점 중 ①) — watch arm 전에 기준선 확보.
-            // 없으면 첫 외부 변경에 헛 배너 + ⬆️ 오판(회귀).
+            // Seed syncedHash at open time (point ① of the three in §8.1): establish a baseline before arming the watch.
+            // Without it, the first external change causes a bogus banner and a false ⬆️ (regression).
             store.setSyncedHash(id: note.id, hash: ContentHash.sha256Hex(content))
             addController(for: note)
             return .ok
@@ -326,11 +326,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .failure(.contentTooLarge):
             return .tooLarge
         case .failure(.noteNotFound):
-            return .ok   // add는 이 에러를 반환하지 않음 (스위치 망라용 방어)
+            return .ok   // add never returns this error (defensive, to make the switch exhaustive)
         }
     }
 
-    /// 단일 파일 열기 실패를 즉시 1건 보고 (패널 경로).
+    /// Report a single-file open failure immediately, one notification (panel path).
     private func reportOpenFailure(_ outcome: OpenOutcome, _ name: String) {
         switch outcome {
         case .ok: break
@@ -340,10 +340,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// 파일 연결 스티커의 현재 내용을 원본 .md 파일에 수동 반영 (사용자 명시 동작).
-    /// 양방향 자동 동기화(스펙 §2.1이 배제)가 아니라, 버튼 누를 때만 스티커→파일 단방향 기록 =
-    /// 그 순간 단일 writer라 충돌 회피. Live Sync(파일→스티커, Phase 2)와 독립.
-    /// 성공 시 true — 호출부(스티커 버튼)가 즉각 시각 피드백(체크/X)을 주도록. 실패는 reportError로 상세 알림.
+    /// Manually push a linked sticker's current content to its source .md file (explicit user action).
+    /// Not two-way auto-sync (spec §2.1 rules that out): only on button press, a one-way sticker→file write, so
+    /// it's the sole writer at that moment and avoids conflicts. Independent of Live Sync (file→sticker, Phase 2).
+    /// Returns true on success so the caller (sticker button) can give instant visual feedback (check/X). Failures notify in detail via reportError.
     @discardableResult
     func saveNoteToSourceFile(id: UUID) -> Bool {
         guard let note = store.notes.first(where: { $0.id == id }), note.sourcePath != nil else { return false }
@@ -351,12 +351,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             reportError("원본 파일을 찾을 수 없습니다. 이동/삭제됐을 수 있습니다.")
             return false
         }
-        // 심링크는 실제 대상으로 해소 후 기록 — atomically:true의 rename이 링크를 일반 파일로
-        // 치환해 vault 심링크 구조를 깨는 것을 방지 (리뷰 B Major).
+        // Resolve symlinks to the real target before writing: prevents atomically:true's rename from replacing
+        // the link with a regular file and breaking the vault's symlink structure (review B Major).
         let url = resolved.resolvingSymlinksInPath()
 
-        // 충돌 감지(해시 기반, §3.2): 현재 파일 내용 해시 != syncedHash면 외부 변경 → 확인 다이얼로그.
-        // syncedHash==nil(미시드)이면 감지 건너뜀(Phase 1 mtime nil 가드와 동형 — 없으면 첫 ⬆️ 헛 다이얼로그 회귀).
+        // Conflict detection (hash-based, §3.2): if the current file content hash != syncedHash, it changed externally → confirmation dialog.
+        // If syncedHash==nil (not seeded), skip detection (mirrors the Phase 1 mtime-nil guard; without it, the first ⬆️ triggers a bogus dialog, a regression).
         if let baseline = note.syncedHash,
            let fileContent = try? String(contentsOf: url, encoding: .utf8),
            ContentHash.sha256Hex(fileContent) != baseline {
@@ -365,12 +365,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         do {
             try note.content.write(to: url, atomically: true, encoding: .utf8)
-            // 순서 보장(§3.2): 기록 직후 syncedHash 동기 갱신 → 도착하는 watcher 콜백이 F=false로 무시.
+            // Ordering guarantee (§3.2): update syncedHash synchronously right after the write → the incoming watcher callback sees F=false and ignores it.
             store.setSyncedHash(id: id, hash: ContentHash.sha256Hex(note.content))
-            // self-write 억제 창(§3.2, 2차 방어): 재-arm 창에 타이핑해도 헛 배너 방지.
+            // self-write suppression window (§3.2, second line of defense): prevents a bogus banner even if the user types during the re-arm window.
             suppressedNotes.insert(id)
-            // ⚠️ 불변식: 이 억제 창(0.3s)은 FileWatcher 재-arm+onChange 주기(0.15s)보다 반드시 커야
-            // atomic-save의 self-write가 억제 안에서 소거된다. 둘 중 하나만 바꾸면 헛 배너 회귀.
+            // ⚠️ Invariant: this suppression window (0.3s) must be larger than the FileWatcher re-arm + onChange cycle (0.15s)
+            // so the atomic-save's self-write is absorbed within suppression. Change only one of them and the bogus banner regresses.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.suppressedNotes.remove(id) }
             return true
         } catch {
@@ -379,7 +379,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// 원본이 외부에서 변경됐을 때만 뜨는 덮어쓰기 확인. 사용자가 "덮어쓰기"를 골라야 true.
+    /// Overwrite confirmation shown only when the source changed externally. Returns true only if the user picks "덮어쓰기".
     private func confirmOverwrite(fileName: String) -> Bool {
         let alert = NSAlert()
         alert.messageText = "원본 파일이 외부에서 변경되었습니다"
@@ -391,8 +391,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return alert.runModal() == .alertFirstButtonReturn
     }
 
-    /// bookmark로 현재 경로를 resolve(파일 이동 추적). 실패 시 sourcePath 문자열로 폴백.
-    /// (stale bookmark 재생성·재저장은 Phase 2 — 현재 일반 bookmark라 영향 낮음.)
+    /// Resolve the current path via bookmark (tracks file moves). Falls back to the sourcePath string on failure.
+    /// (Regenerating and re-saving a stale bookmark is Phase 2; impact is low with plain bookmarks for now.)
     private func resolveSourceURL(note: StickyNote) -> URL? {
         if let data = note.sourceBookmark {
             var stale = false
@@ -404,7 +404,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return nil
     }
 
-    /// 스티커 본문을 .md로 저장. 메뉴바 "스티커 내보내기 ▸ <노트>".
+    /// Save the sticker body as .md. Menu bar "스티커 내보내기 ▸ <노트>".
     func exportNote(id: UUID) {
         guard let note = store.notes.first(where: { $0.id == id }) else { return }
         let panel = NSSavePanel()
@@ -419,7 +419,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// §7 조용한 실패 금지: 알림 시도 + 메뉴바 최근 오류에 항상 적재 (권한 무관 폴백)
+    /// §7 no silent failures: try a notification and always append to the menu bar's recent errors (permission-independent fallback)
     func reportError(_ message: String) {
         recentErrors = Array((recentErrors + [message]).suffix(5))
         let content = UNMutableNotificationContent()
@@ -428,15 +428,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         UNUserNotificationCenter.current().add(
             UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         ) { error in
-            if let error { NSLog("StickyCast notification add failed: %@", "\(error)") }  // 조용한 실패 금지 (iter-011)
+            if let error { NSLog("StickyCast notification add failed: %@", "\(error)") }  // no silent failures (iter-011)
         }
         NSLog("StickyCast error: %@", message)
-        statusMenu?.indicateError()  // §7 폴백: 알림이 안 보여도 메뉴바 아이콘 배지로 알림
+        statusMenu?.indicateError()  // §7 fallback: even if the notification isn't visible, flag it via the menu bar icon badge
     }
 
-    /// §7: sticky:// 핸들러가 이 앱인지 자가 확인. bundleIdentifier로 비교(symlink 견고),
-    /// nil(핸들러 미등록)도 오류로 취급, .app 번들에서만 실행(swift run false-positive 방지, iter-011).
-    /// 앱 실행 시 1회 확인(매 URL 아님) — 다음 실행에서 핸들러 하이재킹도 감지 (스펙 §7의 "첫 실행 1회"보다 견고).
+    /// §7: self-check that this app is the sticky:// handler. Compare by bundleIdentifier (robust against symlinks),
+    /// treat nil (handler unregistered) as an error too, and only run in a .app bundle (avoids a swift run false positive, iter-011).
+    /// Checks once at app launch (not per URL), which also catches handler hijacking on a later launch (more robust than spec §7's "once on first launch").
     private func verifySchemeHandler() {
         guard Bundle.main.bundleURL.pathExtension == "app",
               let probe = URL(string: "sticky://new") else { return }

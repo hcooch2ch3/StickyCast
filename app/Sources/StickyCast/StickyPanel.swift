@@ -8,30 +8,30 @@ final class StickyPanel: NSPanel {
             backing: .buffered,
             defer: false
         )
-        isFloatingPanel = false   // 기본 비고정. 핀 토글 시 applyPinned가 재조정.
-        level = .normal           // 기본: 비고정(작업 앱에 덮여 화면을 가리지 않음). 핀 시 applyPinned가 .floating으로.
-        // collectionBehavior 유지(canJoinAllSpaces): 페이즈 1은 모든 Space 추종 유지 —
-        // 제거하면 nonactivating 앱에서 off-Space 노트 도달 불가 회귀(계획 A안). Space 스코핑은 페이즈 2(허브).
+        isFloatingPanel = false   // unpinned by default. applyPinned re-adjusts on pin toggle.
+        level = .normal           // default: unpinned (sits under the active app so it doesn't block the screen). On pin, applyPinned sets .floating.
+        // keep collectionBehavior (canJoinAllSpaces): Phase 1 keeps following every Space.
+        // removing it regresses to off-Space notes being unreachable in a nonactivating app (plan option A). Space scoping is Phase 2 (hub).
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        isMovableByWindowBackground = true   // 본문 드래그 이동
+        isMovableByWindowBackground = true   // drag the body to move
         isOpaque = false
         backgroundColor = .clear
         hasShadow = true
-        // cross-app 스티커의 핵심: 다른 앱이 활성화돼도 숨지 않아야 함. NSPanel 기본값이
-        // config마다 다르므로 명시적으로 고정 (iter-003 리뷰: 미설정 시 always-visible 무력화 위험).
+        // core of a cross-app sticker: it must not hide when another app activates. The NSPanel default
+        // varies by config, so pin it explicitly (iter-003 review: leaving it unset risks defeating always-visible).
         hidesOnDeactivate = false
-        // Task 3 확정 (2026-07-12 GUI 검증): canBecomeKey=true + becomesKeyOnlyIfNeeded로
-        // SwiftUI 컨트롤(슬라이더/버튼)이 마우스로 조작 가능. canBecomeKey=false에선 컨트롤이 죽고
-        // 패널이 AX 트리에도 노출 안 됐음(자동 검증). .nonactivatingPanel styleMask가 앱 활성화(포커스 탈취)를
-        // 막으므로 key여도 이전 앱 포커스 유지 (검증: 클릭 후 appActive=false, frontmost 불변).
+        // Task 3 settled (2026-07-12 GUI check): canBecomeKey=true plus becomesKeyOnlyIfNeeded lets
+        // SwiftUI controls (slider/buttons) respond to the mouse. With canBecomeKey=false the controls die and
+        // the panel wasn't exposed to the AX tree either (auto-verified). The .nonactivatingPanel styleMask blocks app activation (focus theft),
+        // so even when key it keeps the previous app's focus (verified: after a click appActive=false, frontmost unchanged).
         becomesKeyOnlyIfNeeded = true
         minSize = NSSize(width: 180, height: 120)
     }
     override var canBecomeKey: Bool { true }
 
-    /// 핀 토글: 항상-위(.floating) ↔ 평범(.normal). isFloatingPanel도 레벨과 짝을 맞춘다.
-    /// hidesOnDeactivate=false를 매 토글 재확인 — cross-app 상시노출 불변식(§init)이 어떤 AppKit
-    /// 플래그 상호작용에도 흔들리지 않게 하는 보험 (dual-review iter-003, critic).
+    /// pin toggle: always-on-top (.floating) ↔ normal (.normal). isFloatingPanel is matched to the level too.
+    /// re-assert hidesOnDeactivate=false on every toggle: insurance so the cross-app always-visible invariant (§init)
+    /// isn't shaken by any AppKit flag interaction (dual-review iter-003, critic).
     func applyPinned(_ pinned: Bool) {
         hidesOnDeactivate = false
         level = pinned ? .floating : .normal

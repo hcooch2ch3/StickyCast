@@ -1,4 +1,4 @@
-// lib IIFE 빌드는 그 자체로 단일 파일 (vite-plugin-singlefile 불필요 — HTML 전용 플러그인)
+// The lib IIFE build is already a single file (no need for vite-plugin-singlefile, which is HTML-only)
 import { defineConfig } from "vite";
 
 export default defineConfig({

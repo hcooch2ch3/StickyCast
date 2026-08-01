@@ -1,19 +1,19 @@
 #!/bin/bash
-# extension/deploy.sh — 빌드 후 산출물을 MarkEdit scripts 디렉토리로 배포
+# extension/deploy.sh: build, then deploy the output to the MarkEdit scripts directory
 set -euo pipefail
 cd "$(dirname "$0")"
 
 CONTAINER="$HOME/Library/Containers/app.cyan.markedit/Data/Documents"
 DEST="$CONTAINER/scripts"
 
-# MarkEdit 설치·초기화 확인 (미설치 시 불투명한 cp 실패 대신 명확한 진단)
+# Check that MarkEdit is installed and initialized (gives a clear diagnostic instead of an opaque cp failure)
 if [ ! -d "$CONTAINER" ]; then
   echo "error: MarkEdit이 설치·초기화되지 않았습니다 ($CONTAINER 없음)." >&2
   echo "       MarkEdit을 한 번 실행해 컨테이너를 생성한 뒤 다시 시도하세요." >&2
   exit 1
 fi
 
-# 항상 최신 소스로 빌드 (stale 산출물 배포 방지)
+# Always build from the latest source (avoids deploying a stale artifact)
 npm run build
 
 mkdir -p "$DEST"

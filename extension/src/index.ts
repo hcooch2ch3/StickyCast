@@ -5,11 +5,11 @@ import { MAX_CONTENT_BYTES } from "./limits";
 
 declare const MarkEdit: MarkEditAPI;
 
-// 한도 초과 안내 문구는 상수에서 파생 (하드코딩 재발 방지, iter 리뷰).
+// Derive the over-limit message from the constant so the size never gets hardcoded again (iter review).
 const MAX_MB = Math.round(MAX_CONTENT_BYTES / (1024 * 1024));
 
-// 멱등 등록 가드: MarkEdit은 확장 스크립트를 웹뷰 컨텍스트당 로드해 같은 스크립트가
-// 여러 번 실행될 수 있다 (pre-flight 2단계 실측). 전역 센티널로 중복 메뉴 등록을 막는다.
+// Idempotent registration guard: MarkEdit loads the extension script once per webview context, so the
+// same script can run multiple times (confirmed in a two-stage pre-flight test). A global sentinel blocks duplicate menu registration.
 const g = globalThis as unknown as { __stickyCastRegistered?: boolean };
 if (!g.__stickyCastRegistered) {
   g.__stickyCastRegistered = true;
@@ -17,12 +17,12 @@ if (!g.__stickyCastRegistered) {
   MarkEdit.addMainMenuItem([{
     title: "Pop as Sticky",
     action: () => {
-      // 선택 영역이 있으면 그것을, 없으면 문서 전체를 스티커로. 파생 로직은 deriveContent(순수 함수, 테스트 대상).
+      // Use the selection if there is one, otherwise the whole document. deriveContent does the work (pure function, covered by tests).
       const selections = MarkEdit.editorAPI.getSelections();
       const hasSelection = selections.some((r) => r.to !== r.from);
       const content = deriveContent(selections, (range) => MarkEdit.editorAPI.getText(range));
 
-      // 공백만 있는 문서/선택도 빈 것으로 취급 (보이지 않는 빈 카드 발사 방지). 발사 콘텐츠는 원문 보존.
+      // Treat a whitespace-only document or selection as empty too (avoids launching an invisible blank card). The launched content keeps the original text.
       if (content.trim().length === 0) {
         void MarkEdit.showAlert({
           title: "띄울 내용이 없습니다",
@@ -31,7 +31,7 @@ if (!g.__stickyCastRegistered) {
         return;
       }
 
-      // 콘텐츠 한도(원문 바이트) 초과면 자르지 않고 거부 + 안내 (§7 조용한 실패 금지 / 잘림 없음).
+      // Over the content limit (raw bytes): reject and warn instead of truncating (§7 no silent failure, no truncation).
       const url = buildStickyURL(content, MAX_CONTENT_BYTES);
       if (url === null) {
         void MarkEdit.showAlert({

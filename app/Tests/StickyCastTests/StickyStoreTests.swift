@@ -16,9 +16,9 @@ final class StickyStoreTests: XCTestCase {
         let store = makeStore()
         let a = try! store.add(content: "a").get()
         let b = try! store.add(content: "b").get()
-        XCTAssertGreaterThan(a.frame.maxX, screen.width * 0.6)   // 우상단
+        XCTAssertGreaterThan(a.frame.maxX, screen.width * 0.6)   // top-right
         XCTAssertGreaterThan(a.frame.maxY, screen.height * 0.6)
-        XCTAssertEqual(b.frame.origin.x, a.frame.origin.x - 24)  // 24px 캐스케이드
+        XCTAssertEqual(b.frame.origin.x, a.frame.origin.x - 24)  // 24px cascade
         XCTAssertEqual(b.frame.origin.y, a.frame.origin.y - 24)
     }
 
@@ -69,7 +69,7 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testUnsupportedSchemaVersionNotLoaded() {
-        // schemaVersion 2 → 복원 건너뜀 (다운그레이드/손실 방지, iter-008)
+        // schemaVersion 2 → skip restore (prevents downgrade and data loss, iter-008)
         let future = """
         {"schemaVersion":2,"notes":[
           {"id":"11111111-1111-1111-1111-111111111111","content":"future",
@@ -83,7 +83,7 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testRestoreIsolatesCorruptItems_badThenGood() {
-        // 부패 항목이 먼저 와도 뒤의 정상 항목 생존 (순서 무관, iter-008)
+        // a corrupt item first still lets a later valid item survive (order-independent, iter-008)
         let json = """
         {"schemaVersion":1,"notes":[
           {"id":"not-a-uuid","content":123},
@@ -99,7 +99,7 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testAddRejectsOversizeContent() {
-        // 콘텐츠 바이트 캡: 정확히 한도면 허용, 1바이트 초과면 .contentTooLarge (재리뷰)
+        // Content byte cap: exactly at the limit is allowed, one byte over is .contentTooLarge (re-review)
         let store = makeStore()
         let atCap = String(repeating: "a", count: StickyStore.maxContentBytes)
         if case .failure = store.add(content: atCap) { XCTFail("정확히 한도는 허용돼야") }
@@ -110,21 +110,21 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testAddContentCapCountsBytesNotChars() {
-        // 멀티바이트는 문자 수가 아닌 UTF-8 바이트로 판정 (한글 3바이트)
+        // Multibyte is judged by UTF-8 bytes, not character count (Hangul is 3 bytes)
         let store = StickyStore(defaults: defaults, screenFrame: screen)
-        // maxContentBytes 바로 아래를 한글로 채워 바이트 기준 판정 확인 (문자수 < 바이트수)
-        let charCount = StickyStore.maxContentBytes / 3      // 한글 charCount개 = 3·charCount 바이트 ≤ 한도
+        // Fill just under maxContentBytes with Hangul to confirm byte-based judgement (char count < byte count)
+        let charCount = StickyStore.maxContentBytes / 3      // charCount Hangul chars = 3*charCount bytes, within the limit
         let ok = String(repeating: "가", count: charCount)
         XCTAssertLessThanOrEqual(ok.utf8.count, StickyStore.maxContentBytes)
         if case .failure = store.add(content: ok) { XCTFail("바이트 한도 내 한글은 허용") }
-        let over = String(repeating: "가", count: charCount + 1) // 3바이트 더 → 초과
+        let over = String(repeating: "가", count: charCount + 1) // 3 more bytes → over the limit
         if case .failure(let e) = store.add(content: over) {
             XCTAssertEqual(e, .contentTooLarge)
         } else { XCTFail("바이트 초과 한글은 .contentTooLarge") }
     }
 
     func testRestoreDropsOversizeContent() {
-        // 예전(큰 캡) 시절 저장된 >1MB 노트는 복원 시 버려져야 (렌더 프리즈 방지, 재리뷰 MAJOR)
+        // Notes >1MB saved under the old (larger) cap must be dropped on restore (prevents render freeze, re-review MAJOR)
         let big = String(repeating: "a", count: StickyStore.maxContentBytes + 100)
         let json = """
         {"schemaVersion":1,"notes":[
@@ -137,12 +137,12 @@ final class StickyStoreTests: XCTestCase {
         defaults.set(json.data(using: .utf8), forKey: "stickyStore.v1")
         let store = makeStore()
         store.restore()
-        XCTAssertEqual(store.notes.count, 1)          // 큰 노트 버려지고 정상 1개만
+        XCTAssertEqual(store.notes.count, 1)          // big note dropped, only the 1 valid one
         XCTAssertEqual(store.notes[0].content, "ok")
     }
 
     func testRestoreClampsToCap() {
-        // over-cap 저장 상태(35개)도 복원 시 maxStickies로 정규화 (iter-010)
+        // An over-cap saved state (35 notes) is normalized to maxStickies on restore (iter-010)
         var notesJSON: [String] = []
         for i in 0..<35 {
             let uuid = String(format: "%08d-0000-0000-0000-000000000000", i)
@@ -156,8 +156,8 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testRestoreReportsDropCounts() {
-        // §7: 복원 드롭을 호출부가 사용자에게 알릴 수 있도록 건수를 보고한다.
-        // 구성: oversize 2개 + 정상 34개 = 36개 → withinSize 34, cap(30) 초과 4개 잘림 → restored 30.
+        // §7: report drop counts so the caller can notify the user about restore drops.
+        // Setup: 2 oversize + 34 valid = 36 → withinSize 34; 4 over the cap (30) are clipped → restored 30.
         let big = String(repeating: "a", count: StickyStore.maxContentBytes + 100)
         var notesJSON: [String] = []
         for i in 0..<2 {
@@ -180,7 +180,7 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testRestoreCleanStateReportsNoDrops() {
-        // 정상 복원(드롭 없음)은 hasDrops == false → 사용자 알림 안 뜸
+        // A clean restore (no drops) has hasDrops == false → no user notification
         let store = makeStore()
         _ = try! store.add(content: "a").get()
         let store2 = makeStore()
@@ -192,7 +192,7 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testRestoreCompactsDroppedBlob() {
-        // 드롭 후 정규화 결과가 영속화되어, 재복원 시 드롭이 반복되지 않는다 (A-Minor: restore 컴팩션).
+        // The normalized result after dropping is persisted, so a re-restore does not repeat the drop (A-Minor: restore compaction).
         let big = String(repeating: "a", count: StickyStore.maxContentBytes + 100)
         let json = """
         {"schemaVersion":1,"notes":[
@@ -204,9 +204,9 @@ final class StickyStoreTests: XCTestCase {
         """
         defaults.set(json.data(using: .utf8), forKey: "stickyStore.v1")
         let first = makeStore().restore()
-        XCTAssertTrue(first.hasDrops)                 // 첫 복원: 큰 노트 드롭
+        XCTAssertTrue(first.hasDrops)                 // first restore: big note dropped
         let second = makeStore().restore()
-        XCTAssertFalse(second.hasDrops)               // 재복원: 이미 컴팩션되어 드롭 없음
+        XCTAssertFalse(second.hasDrops)               // re-restore: already compacted, no drops
         XCTAssertEqual(second.restored, 1)
     }
 
@@ -220,7 +220,7 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testMigrationV1NoteWithoutPinnedSurvivesFullFidelity() {
-        // 핀 필드가 없던 v1 저장본이 새 구조로 디코드될 때 전 필드 왕복 + pinned == nil 생존
+        // A v1 save without the pinned field, decoded into the new struct: all fields round-trip and pinned == nil survives
         let v1 = """
         {"schemaVersion":1,"notes":[
           {"id":"11111111-1111-1111-1111-111111111111","content":"레거시",
@@ -238,10 +238,10 @@ final class StickyStoreTests: XCTestCase {
         XCTAssertNil(n.pinned)
     }
 
-    // MARK: Live Sync — syncedHash 필드
+    // MARK: Live Sync, syncedHash field
 
     func testSyncedHashDefaultsNilAndMigrates() {
-        // 신규 노트 기본 nil + 기존 저장본(필드 없음) 디코드 시 nil 생존
+        // New notes default to nil, and an existing save (field absent) decodes to nil
         let store = makeStore()
         let n = try! store.add(content: "x").get()
         XCTAssertNil(n.syncedHash)
@@ -256,10 +256,10 @@ final class StickyStoreTests: XCTestCase {
         XCTAssertNil(s2.notes[0].syncedHash)
     }
 
-    // MARK: Live Sync — 복원 시딩 (Task 4)
+    // MARK: Live Sync, restore seeding (Task 4)
 
     func testRestoreSeedsSyncedHashForLinkedNotes() {
-        // Phase 1 저장본(연결 노트, syncedHash 없음) 복원 시 내용 해시로 시드
+        // Restoring a Phase 1 save (linked note, no syncedHash) seeds it from the content hash
         let json = """
         {"schemaVersion":1,"notes":[
           {"id":"11111111-1111-1111-1111-111111111111","content":"파일내용",
@@ -269,19 +269,19 @@ final class StickyStoreTests: XCTestCase {
         defaults.set(json.data(using: .utf8), forKey: "stickyStore.v1")
         let store = makeStore(); store.restore()
         XCTAssertEqual(store.notes[0].syncedHash, ContentHash.sha256Hex("파일내용"))
-        // 리뷰 합치: 시딩이 save()로 영속화돼 재복원 시에도 살아남고 재시딩 반복 안 함
+        // review consensus: seeding is persisted via save(), so it survives a re-restore and does not re-seed
         let s2 = makeStore(); s2.restore()
         XCTAssertEqual(s2.notes[0].syncedHash, ContentHash.sha256Hex("파일내용"))
     }
     func testRestoreDoesNotSeedIndependentNotes() {
-        // 연결 아님(sourcePath nil) → 시드 안 함
+        // not linked (sourcePath nil) → no seeding
         let store = makeStore()
         _ = try! store.add(content: "독립").get()
         let s2 = makeStore(); s2.restore()
         XCTAssertNil(s2.notes[0].syncedHash)
     }
 
-    // MARK: Live Sync — 스토어 메서드 (Task 3)
+    // MARK: Live Sync, store methods (Task 3)
 
     func testDetachFromFileClearsAllLinkMeta() {
         let store = makeStore()
@@ -291,7 +291,7 @@ final class StickyStoreTests: XCTestCase {
         let m = store.notes[0]
         XCTAssertNil(m.sourcePath); XCTAssertNil(m.sourceBookmark)
         XCTAssertNil(m.sourceModifiedDate); XCTAssertNil(m.syncedHash)
-        XCTAssertEqual(m.content, "c")   // 내용 보존
+        XCTAssertEqual(m.content, "c")   // content preserved
     }
     func testApplyFileSyncUpdatesContentAndHash() {
         let store = makeStore()
@@ -309,8 +309,8 @@ final class StickyStoreTests: XCTestCase {
         if case .failure(let e) = store.applyFileSync(id: n.id, content: big, hash: "x") {
             XCTAssertEqual(e, .contentTooLarge)
         } else { XCTFail(".contentTooLarge 기대") }
-        XCTAssertEqual(store.notes[0].content, "ok")       // 미반영
-        XCTAssertEqual(store.notes[0].syncedHash, "seed")  // 해시 불변
+        XCTAssertEqual(store.notes[0].content, "ok")       // not applied
+        XCTAssertEqual(store.notes[0].syncedHash, "seed")  // hash unchanged
     }
     func testSetSourcePathUpdatesPathAndBookmark() {
         let store = makeStore()
@@ -320,7 +320,7 @@ final class StickyStoreTests: XCTestCase {
         XCTAssertEqual(store.notes[0].sourceBookmark, Data([9]))
     }
     func testApplyFileSyncAtExactCapSucceeds() {
-        // 리뷰 합치: `<=` 경계 — 정확히 한도면 반영돼야(우발적 `<` 회귀 가드)
+        // review consensus: `<=` boundary, exactly at the limit must apply (guards against an accidental `<` regression)
         let store = makeStore()
         let n = try! store.add(content: "seed", sourcePath: "/tmp/a.md", sourceBookmark: nil).get()
         let atCap = String(repeating: "a", count: StickyStore.maxContentBytes)
@@ -331,7 +331,7 @@ final class StickyStoreTests: XCTestCase {
         XCTAssertEqual(store.notes[0].syncedHash, "h")
     }
     func testDetachFromFilePersistsRoundTrip() {
-        // 리뷰 합치: detach가 save()를 타 재복원 후에도 연결 해제·내용 보존
+        // review consensus: detach goes through save(), so after a re-restore the link is cleared and content preserved
         let store = makeStore()
         let n = try! store.add(content: "keep", sourcePath: "/tmp/a.md", sourceBookmark: Data([1])).get()
         store.setSyncedHash(id: n.id, hash: "h")
@@ -342,7 +342,7 @@ final class StickyStoreTests: XCTestCase {
         XCTAssertEqual(store2.notes[0].content, "keep")
     }
 
-    // MARK: 인라인 편집 (updateContent, 스펙 §4.2.1)
+    // MARK: inline editing (updateContent, spec §4.2.1)
 
     func testUpdateContentChangesAndPersists() {
         let store = makeStore()
@@ -361,21 +361,21 @@ final class StickyStoreTests: XCTestCase {
         if case .failure(let e) = store.updateContent(id: note.id, content: over) {
             XCTAssertEqual(e, .contentTooLarge)
         } else { XCTFail("한도 초과는 .contentTooLarge") }
-        XCTAssertEqual(store.notes[0].content, "작음")   // 원본 불변
+        XCTAssertEqual(store.notes[0].content, "작음")   // original unchanged
     }
 
     func testUpdateContentUnknownIdReturnsNotFound() {
-        // 기존 mutator는 no-op이지만 updateContent는 편집 저장 실패를 알려야 하므로 에러 (§4.2.1)
+        // Existing mutators are no-ops, but updateContent must surface a failed edit save, so it errors (§4.2.1)
         let store = makeStore()
         if case .failure(let e) = store.updateContent(id: UUID(), content: "x") {
             XCTAssertEqual(e, .noteNotFound)
         } else { XCTFail("미존재 id는 .noteNotFound") }
     }
 
-    // MARK: 파일 연동 필드 (편의 기능 Phase 1 — 가져오기 + 링크 저장)
+    // MARK: file-link fields (convenience feature Phase 1: import + link save)
 
     func testAddWithSourcePathStoresAndRoundTrips() {
-        // 파일 열기로 생성 시 sourcePath/sourceBookmark를 저장하고 왕복 생존
+        // When created by opening a file, sourcePath/sourceBookmark are stored and survive the round trip
         let store = makeStore()
         let bookmark = Data([0x01, 0x02, 0x03])
         let note = try! store.add(content: "# 파일 내용",
@@ -392,7 +392,7 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testAddStoresSourceModifiedDate() {
-        // 파일 열기 시 원본 mtime 저장 → write-back 충돌 감지 기준 (round-trip 생존)
+        // On file open, store the source mtime as the baseline for write-back conflict detection (survives round trip)
         let store = makeStore()
         let mtime = Date(timeIntervalSince1970: 1_700_000_000)
         let note = try! store.add(content: "x", sourcePath: "/tmp/a.md",
@@ -404,7 +404,7 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testSetSourceModifiedDatePersists() {
-        // 성공 저장 후 mtime 갱신 → 다음 저장의 충돌 기준을 최신화
+        // After a successful save, update mtime to refresh the conflict baseline for the next save
         let store = makeStore()
         let note = try! store.add(content: "x", sourcePath: "/tmp/a.md", sourceBookmark: nil).get()
         XCTAssertNil(note.sourceModifiedDate)
@@ -416,7 +416,7 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testAddWithoutSourceHasNilFields() {
-        // 기존 경로(클립보드/URL)로 만든 독립 스티커는 source 필드가 nil
+        // An independent sticker made via the existing path (clipboard/URL) has nil source fields
         let store = makeStore()
         let note = try! store.add(content: "독립").get()
         XCTAssertNil(note.sourcePath)
@@ -424,7 +424,7 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testMigrationV1NoteWithoutSourceFieldsSurvives() {
-        // source 필드가 없던 저장본이 새 구조로 디코드될 때 nil로 채워져 생존 (schemaVersion 1 유지)
+        // A save without source fields, decoded into the new struct, fills them with nil and survives (schemaVersion 1 kept)
         let v1 = """
         {"schemaVersion":1,"notes":[
           {"id":"11111111-1111-1111-1111-111111111111","content":"레거시",
@@ -440,7 +440,7 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testAddWithSourceStillEnforcesOversize() {
-        // 링크 저장 경로도 콘텐츠 바이트 캡을 그대로 강제
+        // The link-save path also enforces the content byte cap
         let store = makeStore()
         let over = String(repeating: "a", count: StickyStore.maxContentBytes + 1)
         if case .failure(let e) = store.add(content: over, sourcePath: "/tmp/big.md", sourceBookmark: nil) {
@@ -449,10 +449,10 @@ final class StickyStoreTests: XCTestCase {
     }
 
     func testSetColorPersistsRoundTrip() {
-        // 포스트잇 색상 — 팔레트 키를 저장하고 왕복 생존. 기본은 nil.
+        // Sticky-note color: store the palette key and survive the round trip. Default is nil.
         let store = makeStore()
         let note = try! store.add(content: "색").get()
-        XCTAssertNil(store.notes[0].color)     // 기본 = 색 없음
+        XCTAssertNil(store.notes[0].color)     // default = no color
         store.setColor(id: note.id, color: "yellow")
         let store2 = makeStore()
         store2.restore()
@@ -464,14 +464,14 @@ final class StickyStoreTests: XCTestCase {
         let store = makeStore()
         let note = try! store.add(content: "색").get()
         store.setColor(id: note.id, color: "pink")
-        store.setColor(id: note.id, color: nil)   // 기본으로 되돌림
+        store.setColor(id: note.id, color: nil)   // back to default
         XCTAssertNil(store.notes[0].color)
     }
 
     func testSetPinnedPersistsRoundTrip() {
         let store = makeStore()
         let note = try! store.add(content: "핀").get()
-        XCTAssertNil(store.notes[0].pinned)     // 기본은 비고정
+        XCTAssertNil(store.notes[0].pinned)     // default is unpinned
         store.setPinned(id: note.id, pinned: true)
         let store2 = makeStore()
         store2.restore()

@@ -1,7 +1,7 @@
-// preflight/test-length.js — URL 길이 한계 실측 (측정 대상: 인코딩된 URL 전체 길이)
+// preflight/test-length.js: measure the URL length limit (target: total encoded URL length)
 const fire = (urlLen) => {
   const prefix = "sticky://new?content=";
-  const payload = "A".repeat(urlLen - prefix.length); // 'A'는 유효 base64url 문자
+  const payload = "A".repeat(urlLen - prefix.length); // 'A' is a valid base64url character
   window.location.href = prefix + payload;
 };
 MarkEdit.addMainMenuItem([

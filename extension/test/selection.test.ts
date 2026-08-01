@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { deriveContent, type TextRange } from "../src/selection";
 
-// getText 스텁: range 있으면 "TEXT[from,to]", 없으면 문서 전체 마커. deriveContent가 무엇을 호출하는지 검증.
+// getText stub: returns "TEXT[from,to]" when given a range, otherwise a whole-document marker. Verifies what deriveContent calls.
 function makeGetText(whole = "WHOLE-DOC") {
   return vi.fn((range?: TextRange) =>
     range ? `T[${range.from},${range.to}]` : whole,
@@ -12,7 +12,7 @@ describe("deriveContent (index.ts 선택 파생 로직)", () => {
   it("선택 없음 → 문서 전체(getText())", () => {
     const getText = makeGetText();
     expect(deriveContent([], getText)).toBe("WHOLE-DOC");
-    expect(getText).toHaveBeenCalledWith(); // range 없이 호출
+    expect(getText).toHaveBeenCalledWith(); // called without a range
   });
 
   it("폭 0 선택(캐럿)만 있으면 → 문서 전체", () => {
@@ -37,7 +37,7 @@ describe("deriveContent (index.ts 선택 파생 로직)", () => {
       [{ from: 1, to: 4 }, { from: 10, to: 10 }, { from: 20, to: 15 }],
       getText,
     );
-    expect(out).toBe("T[1,4]\n\nT[15,20]"); // 캐럿 제외, 역방향 정렬
-    expect(getText).not.toHaveBeenCalledWith(); // 선택이 있으므로 문서 전체 호출 안 함
+    expect(out).toBe("T[1,4]\n\nT[15,20]"); // caret dropped, reversed range normalized
+    expect(getText).not.toHaveBeenCalledWith(); // a selection exists, so it never asks for the whole document
   });
 });

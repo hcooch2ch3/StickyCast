@@ -1,9 +1,9 @@
-// preflight/test-url.js — MarkEdit 확장: 외부 URL 네비게이션 가능 여부 검증
-// 변형: A/C/D는 location.href (스킴만 다름), B는 window.open.
-// - A(https): 웹 스킴 외부 핸드오프. WebKit이 자체 렌더 가능한 스킴이라 커스텀 스킴 증거로는 불충분.
-// - D(obsidian://): 비웹 커스텀 스킴 핸드오프 — sticky://가 탈 경로와 동일 계열. 1단계의 핵심 신호.
-// - C(mailto): 이 Mac에서 OS 레벨 핸들러가 깨져 있어 판정 지표에서 제외 (참고용 유지).
-// - B(window.open): WKWebView에서 호스트 미구현 시 무반응이라 진단 가치 낮음 (참고용 유지).
+// preflight/test-url.js: MarkEdit extension, checks whether external URL navigation works
+// Variants: A/C/D use location.href (scheme differs only), B uses window.open.
+// - A(https): web-scheme external handoff. WebKit renders this scheme itself, so it's weak evidence for custom schemes.
+// - D(obsidian://): non-web custom-scheme handoff, same class as the path sticky:// takes. The key signal for step 1.
+// - C(mailto): the OS-level handler is broken on this Mac, so it's excluded from the verdict (kept for reference).
+// - B(window.open): no-op in WKWebView when the host doesn't implement it, so low diagnostic value (kept for reference).
 MarkEdit.addMainMenuItem([
   {
     title: "Pre-flight A: https via location.href",

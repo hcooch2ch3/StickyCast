@@ -9,7 +9,7 @@ final class FileWatcherTests: XCTestCase {
         try! "v0".write(toFile: path, atomically: false, encoding: .utf8)
         let w = FileWatcher()
         let exp = expectation(description: "change"); exp.expectedFulfillmentCount = 2
-        exp.assertForOverFulfill = false   // watcher는 .write/.extend/재-arm으로 >2 발화 가능 → ≥2만 요구
+        exp.assertForOverFulfill = false   // watcher may fire >2 via .write/.extend/re-arm, so require only >=2
         var events = 0
         w.watch(noteID: UUID(), url: URL(fileURLWithPath: path)) { events += 1; exp.fulfill() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -25,8 +25,9 @@ final class FileWatcherTests: XCTestCase {
         try? FileManager.default.removeItem(atPath: dir)
     }
 
-    // Finding #1 회귀: rename으로 debounce 재-arm이 예약된 뒤 그 150ms 창 안에 unwatch하면
-    // 예약이 취소돼 이후 어떤 ping도 오면 안 된다(좀비 감시 부활·헛 다이얼로그 방지).
+    // Finding #1 regression: after a rename schedules a debounce re-arm, unwatching within that
+    // 150ms window must cancel the scheduled re-arm so no further ping arrives (prevents zombie
+    // watcher revival and spurious dialogs).
     func testUnwatchDuringRearmWindowCancelsPendingRearm() {
         let dir = NSTemporaryDirectory() + "fwtest-\(UUID().uuidString)"
         try! FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
@@ -37,12 +38,12 @@ final class FileWatcherTests: XCTestCase {
         var unwatched = false
         var pingsAfterUnwatch = 0
         w.watch(noteID: id, url: URL(fileURLWithPath: path)) { if unwatched { pingsAfterUnwatch += 1 } }
-        // rename 이벤트 발화 → +0.15s 재-arm 예약
+        // rename event fires → schedules re-arm at +0.15s
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             let tmp = dir + "/.tmp"; try! "v1".write(toFile: tmp, atomically: false, encoding: .utf8)
             rename(tmp, path)
         }
-        // 재-arm 창(150ms) 안에서 unwatch
+        // unwatch inside the re-arm window (150ms)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             unwatched = true
             w.unwatch(noteID: id)
@@ -55,8 +56,9 @@ final class FileWatcherTests: XCTestCase {
         try? FileManager.default.removeItem(atPath: dir)
     }
 
-    // Fix #2 회귀(dual-review 2차): unwatchAll도 mid-rearm 노트(watches엔 없고 rearmWork엔 있는)를
-    // 취소해야 한다. rename 후 재-arm 창 안에서 unwatchAll 호출 시 이후 ping이 없어야 함.
+    // Fix #2 regression (second dual-review pass): unwatchAll must also cancel a mid-rearm note
+    // (absent from watches but present in rearmWork). Calling unwatchAll inside the re-arm window
+    // after a rename should leave no further ping.
     func testUnwatchAllDuringRearmWindowCancelsPendingRearm() {
         let dir = NSTemporaryDirectory() + "fwtest-\(UUID().uuidString)"
         try! FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
@@ -68,9 +70,9 @@ final class FileWatcherTests: XCTestCase {
         w.watch(noteID: UUID(), url: URL(fileURLWithPath: path)) { if unwatched { pingsAfterUnwatch += 1 } }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             let tmp = dir + "/.tmp"; try! "v1".write(toFile: tmp, atomically: false, encoding: .utf8)
-            rename(tmp, path)   // rename → +0.15s 재-arm 예약, 이 순간 watches에선 제거됨
+            rename(tmp, path)   // rename → schedules re-arm at +0.15s; at this moment it is removed from watches
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {   // 재-arm 창 안
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {   // inside the re-arm window
             unwatched = true
             w.unwatchAll()
         }

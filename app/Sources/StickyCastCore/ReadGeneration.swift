@@ -1,25 +1,26 @@
 import Foundation
 
-/// 노트별 monotonic 세대 카운터 — 비동기 파일 읽기의 out-of-order 완료를 latest-wins로 폐기(Finding #2).
+/// Per-note monotonic generation counter. Discards out-of-order completions of async file reads via latest-wins (Finding #2).
 ///
-/// `.write`/`.extend`는 디바운스 없이 즉시 발화하고 `readLinkedFile`은 순서 보장 없는 global 큐로
-/// 던지므로, 빠른 연속 저장 시 완료가 역순으로 main에 도착해 스티커가 파일보다 뒤처져 고착될 수 있다.
-/// 읽기 시작 시 `begin`으로 토큰을 발급하고, 완료 시 `isCurrent`로 최신 세대인지 검사해 아니면 버린다.
+/// `.write`/`.extend` fire immediately with no debounce, and `readLinkedFile` dispatches to a global
+/// queue with no ordering guarantee, so on rapid back-to-back saves the completions can reach main in
+/// reverse order and the sticker gets stuck lagging behind the file.
+/// A read issues a token via `begin` at start, and `isCurrent` at completion checks whether it's still the latest generation, dropping it otherwise.
 ///
-/// 스레드 계약: **메인 큐 전용**(handleFileEvent·완료 콜백 모두 main) — 락 없음.
+/// Thread contract: **main queue only** (handleFileEvent and completion callbacks are all on main). No locks.
 public final class ReadGeneration {
     private var current: [UUID: Int] = [:]
 
     public init() {}
 
-    /// 새 읽기 시작 — 이 노트의 세대를 1 올리고 토큰을 반환한다.
+    /// Starts a new read: bumps this note's generation by 1 and returns the token.
     public func begin(_ id: UUID) -> Int {
         let g = (current[id] ?? 0) + 1
         current[id] = g
         return g
     }
 
-    /// 완료 결과를 반영해도 되는지 — 발급받은 토큰이 아직 최신 세대일 때만 true.
+    /// Whether the completion result may be applied: true only when the issued token is still the latest generation.
     public func isCurrent(_ id: UUID, _ token: Int) -> Bool {
         current[id] == token
     }

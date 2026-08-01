@@ -1,7 +1,7 @@
 import AppKit
 import StickyCastCore
 
-/// 메뉴바 아이콘 — LSUIElement 앱의 유일한 상시 진입점 (§5.3)
+/// menu-bar icon: the only always-on entry point for an LSUIElement app (§5.3)
 final class StatusMenuController: NSObject, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private unowned let appDelegate: AppDelegate
@@ -17,7 +17,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         installFileDrop()
     }
 
-    /// 메뉴바 아이콘에 .md 드롭 → 스티커로 열기 (§5, Task 12). button 위에 드롭 대상 뷰를 채워 부착.
+    /// drop a .md onto the menu-bar icon → open it as a sticker (§5, Task 12). Attaches a drop-target view filling the button.
     private func installFileDrop() {
         guard let button = statusItem.button else { return }
         let drop = FileDropView { [weak self] urls in self?.appDelegate.openDroppedFiles(urls) }
@@ -36,18 +36,18 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         statusItem.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "StickyCast")
     }
 
-    /// §7 폴백: 알림이 권한 거부 등으로 안 보일 수 있으므로, 오류 시 아이콘을 배지로 바꿔
-    /// 사용자가 메뉴를 열지 않아도 오류 발생을 알 수 있게 한다. 메뉴를 열면(=오류가 상단에 보이면) 해제.
+    /// §7 fallback: notifications may not show (permission denied, etc.), so on error swap the icon to a badge
+    /// so the user sees something went wrong without opening the menu. Cleared when the menu opens (= the error is visible at top).
     func indicateError() {
         setIcon(error: true)
     }
 
-    // 열 때마다 현재 상태로 재구성
+    // rebuild from current state each time it opens
     func menuNeedsUpdate(_ menu: NSMenu) {
         setIcon(error: false)
         menu.removeAllItems()
 
-        // §7: 최근 오류는 메뉴 최상단 — 사용자가 다른 항목보다 먼저 보도록 (iter-011)
+        // §7: recent errors go at the very top so the user sees them before anything else (iter-011)
         if !appDelegate.recentErrors.isEmpty {
             menu.addItem(withTitle: "⚠︎ 최근 오류", action: nil, keyEquivalent: "")
             for err in appDelegate.recentErrors {
@@ -56,13 +56,13 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
-        // 생성 진입점 (편의 기능 Phase 1) — 목록보다 위에 두어 주요 동작이 먼저 보이게.
+        // create entry points (convenience features, Phase 1): above the list so the main actions come first.
         menu.addItem(makeItem("클립보드에서 스티커", #selector(newFromClipboard)))
         menu.addItem(makeItem("마크다운 파일 열기…", #selector(openFile)))
         menu.addItem(.separator())
 
-        // 메뉴는 살아있는 컨트롤러가 있는 노트만 나열 — store와 controllers가 어긋나도
-        // 클릭이 조용히 무시되는 항목을 만들지 않는다.
+        // list only notes that have a live controller: even if store and controllers drift,
+        // don't create an item whose click is silently ignored.
         let liveNotes = appDelegate.store.notes.filter { appDelegate.controllers[$0.id] != nil }
         if liveNotes.isEmpty {
             menu.addItem(withTitle: "스티커 없음", action: nil, keyEquivalent: "")
@@ -79,7 +79,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             }
         }
         menu.addItem(.separator())
-        // 스티커가 있을 때만 토글 표시. 라벨은 실제 가시성에서 파생(하나라도 보이면 "숨기기", 전부 숨겨졌으면 "보이기").
+        // show the toggle only when stickers exist. Label derives from actual visibility (any visible → "hide", all hidden → "show").
         if !liveNotes.isEmpty {
             if appDelegate.anyStickerVisible {
                 menu.addItem(makeItem("모두 숨기기", #selector(hideAllStickers)))
@@ -88,7 +88,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             }
         }
         menu.addItem(makeItem("모두 앞으로", #selector(bringAllToFront)))
-        // 스티커 내보내기 — 서브메뉴로 노트별 나열 (노트 제목 원클릭=앞으로 동작 보존)
+        // export sticker: list notes in a submenu (keeps the one-click-on-title = bring-forward behavior)
         if !liveNotes.isEmpty {
             let exportItem = NSMenuItem(title: "스티커 내보내기", action: nil, keyEquivalent: "")
             let submenu = NSMenu()
@@ -118,7 +118,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     @objc private func bringNoteToFront(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? UUID else { return }
-        appDelegate.controllers[id]?.bringToFrontHighlighted()  // §5.3 "앞으로 + 강조"
+        appDelegate.controllers[id]?.bringToFrontHighlighted()  // §5.3 "bring forward + emphasize"
     }
     @objc private func newFromClipboard() { appDelegate.createStickyFromClipboard() }
     @objc private func openFile() { appDelegate.openMarkdownFile() }
@@ -132,7 +132,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     @objc private func hideAllStickers() { appDelegate.hideAllStickers() }
     @objc private func showAllStickers() { appDelegate.showAllStickers() }
     @objc private func closeAll() {
-        // close()가 controllers에서 항목을 제거하므로 스냅샷 후 순회 (순회 중 변형 방지)
+        // close() removes the entry from controllers, so snapshot before iterating (avoid mutation during iteration)
         Array(appDelegate.controllers.values).forEach { $0.close() }
     }
     @objc private func showAbout() {
@@ -140,7 +140,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             .credits: NSAttributedString(string:
                 "Markdown rendering: swift-markdown-ui (MIT)\nMarkEdit companion tool")
         ])
-        NSApp.activate()  // About 패널만 예외적으로 활성화 (macOS 14 non-deprecated)
+        NSApp.activate()  // activate only for the About panel, as an exception (macOS 14 non-deprecated)
     }
     @objc private func quit() { NSApp.terminate(nil) }
 }

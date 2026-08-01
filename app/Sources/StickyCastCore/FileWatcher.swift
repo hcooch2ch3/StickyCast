@@ -1,19 +1,19 @@
 import Foundation
 
-/// atomic-save(temp+rename)에도 살아남는 파일 감시 (S2 스파이크 정식화, 스펙 §4).
-/// 파일 fd DispatchSource + rename/delete 시 debounce 후 경로 재확인·재-arm.
-/// security-scoped URL을 fd 수명 내내 보유(N1) — 비샌드박스 near-no-op이나 구조를 갖춘다.
-/// 스레드 계약: 콜백은 메인 큐. 호출부(컨트롤러)는 메인. 순수 Foundation이라 Core에 두어 유닛 테스트.
+/// File watcher that survives atomic saves (temp+rename). Formalizes the S2 spike, spec §4.
+/// File fd DispatchSource, plus debounce then path recheck and re-arm on rename/delete.
+/// Holds the security-scoped URL for the fd's whole lifetime (N1). Near-no-op unsandboxed, but the structure is there.
+/// Thread contract: callbacks on the main queue. The caller (controller) is on main. Pure Foundation, so it lives in Core and gets unit tested.
 public final class FileWatcher {
     private struct Watch { let source: DispatchSourceFileSystemObject; let scopedURL: URL; let accessing: Bool }
     private var watches: [UUID: Watch] = [:]
-    // 진행 중인 debounce 재-arm을 취소 가능하게 보유(Finding #1): teardown/unwatch가
-    // 예약된 재-arm을 반드시 무효화해야 detach/삭제 후 좀비 감시 부활·fd 누수·헛 다이얼로그를 막는다.
+    // Holds the in-flight debounce re-arm so it can be cancelled (Finding #1): teardown/unwatch must
+    // invalidate a scheduled re-arm, or detach/delete leaves a zombie watch revived, an fd leak, and a spurious dialog.
     private var rearmWork: [UUID: DispatchWorkItem] = [:]
 
     public init() {}
 
-    /// url에 접근 시작(security-scope) 후 fd 감시 arm. 기존 watch는 교체.
+    /// Starts accessing the url (security-scope), then arms the fd watch. Replaces any existing watch.
     public func watch(noteID: UUID, url: URL, onChange: @escaping () -> Void) {
         unwatch(noteID: noteID)
         arm(noteID: noteID, url: url, onChange: onChange)
@@ -34,33 +34,33 @@ public final class FileWatcher {
     private func handle(noteID: UUID, url: URL, flags: DispatchSource.FileSystemEvent, onChange: @escaping () -> Void) {
         if flags.contains(.write) || flags.contains(.extend) { onChange() }
         if flags.contains(.delete) || flags.contains(.rename) {
-            // atomic swap/rename: 현재 fd는 낡음 → 원자적 stop-old, debounce 후 재-arm(§4).
-            // teardown이 이전 예약을 취소하므로 rapid rename도 최신 예약 1개만 남는다.
+            // atomic swap/rename: the current fd is stale, so stop-old atomically and re-arm after a debounce (§4).
+            // teardown cancels the prior schedule, so even a rapid rename leaves only the latest single schedule.
             teardown(noteID: noteID)
             let work = DispatchWorkItem { [weak self] in
                 guard let self else { return }
                 self.rearmWork[noteID] = nil
                 if FileManager.default.fileExists(atPath: url.path) {
                     self.arm(noteID: noteID, url: url, onChange: onChange)
-                    onChange()   // 재-arm = 파일 변경으로 판정부에 통지 (통일된 "재평가" ping)
+                    onChange()   // re-arm = notify the decision logic of a file change (one unified "re-evaluate" ping)
                 } else {
-                    onChange()   // 진짜 삭제 → 판정부(§7)가 재확인 후 삭제 처리
+                    onChange()   // real delete: the decision logic (§7) rechecks, then handles the deletion
                 }
             }
             rearmWork[noteID] = work
-            // ⚠️ 불변식: 이 재-arm 지연(0.15s)은 AppDelegate self-write 억제 창(0.3s)보다 반드시 작아야
-            // atomic-save의 self-write 재발화가 억제 안에 들어와 헛 배너를 막는다.
+            // ⚠️ Invariant: this re-arm delay (0.15s) must stay below AppDelegate's self-write suppression window (0.3s),
+            // so the atomic-save self-write refire lands inside the suppression window and no spurious banner shows.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
         }
     }
 
     public func unwatch(noteID: UUID) { teardown(noteID: noteID) }
-    // 스냅샷 — 반복 중 변형 방지. rearmWork.keys도 합집합: rename 직후(watches엔 없고 rearmWork엔 있는)
-    // mid-rearm 노트도 취소해야 종료 경로에서 좀비 감시 부활을 막는다 (dual-review 2차).
+    // Snapshot to avoid mutation while iterating. Union in rearmWork.keys too: a note just after a rename
+    // (absent from watches but present in rearmWork) is mid-rearm and must also be cancelled, or the teardown path revives a zombie watch (dual-review round 2).
     public func unwatchAll() { Set(watches.keys).union(rearmWork.keys).forEach { teardown(noteID: $0) } }
 
     private func teardown(noteID: UUID) {
-        rearmWork[noteID]?.cancel()   // 진행 중 재-arm 예약 무효화(Finding #1) — watch 없어도 실행돼야 함
+        rearmWork[noteID]?.cancel()   // invalidate the in-flight re-arm schedule (Finding #1): must run even when there's no watch
         rearmWork[noteID] = nil
         guard let w = watches.removeValue(forKey: noteID) else { return }
         w.source.cancel()

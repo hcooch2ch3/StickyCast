@@ -1,10 +1,10 @@
-// extension/src/limits.ts — 스티커 콘텐츠 한도 (원문 바이트 기준). 단일 소스.
+// extension/src/limits.ts: sticky content limit (in raw bytes). Single source.
 //
-// 세 예산은 별개다 (iter 리뷰):
-//   - 전송(URL): 실측상 32MB까지 무손실(64MB 드롭). 병목 아님.
-//   - 저장(UserDefaults) / 렌더(swift-markdown-ui): 대용량 블롭엔 부적합 → 여기가 실질 병목.
-// 따라서 제품 한도는 전송이 아니라 저장·렌더가 감당할 값으로 정한다.
+// The three budgets are separate (iter review):
+//   - Transport (URL): measured lossless up to 32MB (drops at 64MB). Not the bottleneck.
+//   - Storage (UserDefaults) / render (swift-markdown-ui): poor with large blobs, so this is the real bottleneck.
+// So the product limit is set to what storage and rendering can handle, not what transport allows.
 //
-// 1MB: 이 프로젝트 최대 문서(≈59KB)의 17배, 책 한 챕터급. 현실의 모든 마크다운 문서를 커버하면서
-// UserDefaults(최대 30장×1MB)와 렌더링을 건강하게 유지. 초과 시 확장이 발사 거부 + 안내.
+// 1MB: 17x this project's largest document (≈59KB), about one book chapter. Covers every real-world markdown
+// document while keeping UserDefaults (up to 30 cards x 1MB) and rendering healthy. Over the limit, the extension refuses to launch and warns.
 export const MAX_CONTENT_BYTES = 1 * 1024 * 1024;

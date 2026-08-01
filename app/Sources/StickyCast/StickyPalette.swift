@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 포스트잇 프리셋 색상 팔레트. 저장은 rawValue 키(String), 실제 Color 매핑은 여기(앱 측).
-/// StickyNote.color는 이 키를 담고, nil = 기본 배경(windowBackgroundColor).
+/// Sticky-note preset color palette. Persisted as the rawValue key (String); the actual Color mapping lives here (app side).
+/// StickyNote.color holds this key; nil means the default background (windowBackgroundColor).
 enum StickyPalette: String, CaseIterable, Identifiable {
     case yellow, pink, blue, green, purple
 
@@ -27,7 +27,7 @@ enum StickyPalette: String, CaseIterable, Identifiable {
         }
     }
 
-    /// 저장된 키 → 배경 Color. nil이거나 미지원 키(예: 미래 버전 색)면 nil = 기본 배경으로 폴백.
+    /// Stored key → background Color. If nil or an unsupported key (e.g. a color from a future version), fall back to nil = default background.
     static func color(forKey key: String?) -> Color? {
         guard let key, let palette = StickyPalette(rawValue: key) else { return nil }
         return palette.color

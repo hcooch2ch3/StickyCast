@@ -1,25 +1,25 @@
 import Foundation
 
-/// Live Sync 판정 결과 (스펙 §3의 (dirty, file-changed) 2×2).
+/// Live Sync decision result (the (dirty, file-changed) 2×2 from spec §3).
 public enum SyncDecision: Equatable {
-    case ignore      // 파일 실제 변경 없음(touch-only) 또는 미시드 → 무시
-    case autoApply   // 파일만 변경, 스티커 clean → 자동 반영
-    case converged   // 양쪽이 같은 내용에 도달 → syncedHash만 갱신
-    case conflict    // 스티커 dirty + 파일 변경, 내용 다름 → 충돌 배너
+    case ignore      // file didn't actually change (touch-only) or unseeded → ignore
+    case autoApply   // only the file changed, sticker clean → apply automatically
+    case converged   // both reached the same content → update syncedHash only
+    case conflict    // sticker dirty + file changed, content differs → conflict banner
 }
 
-/// FileWatcher 이벤트 시 새 파일 내용을 읽고 어떤 동작을 할지 판정한다(스펙 §3).
+/// On a FileWatcher event, reads the new file content and decides what to do (spec §3).
 /// - Parameters:
-///   - stickerHash: 스티커 현재 내용 해시
-///   - fileHash: 새 파일 내용 해시
-///   - syncedHash: 마지막 동기 기준선 (nil=미시드)
-///   - isEditing: 인라인 편집 중(미커밋 draft) 여부 — dirty로 취급(§2 활성 편집 clobber 방지)
+///   - stickerHash: hash of the sticker's current content
+///   - fileHash: hash of the new file content
+///   - syncedHash: last sync baseline (nil = unseeded)
+///   - isEditing: whether an inline edit is in progress (uncommitted draft). Treated as dirty (§2, avoid clobbering an active edit).
 public func decideSyncAction(stickerHash: String, fileHash: String, syncedHash: String?, isEditing: Bool) -> SyncDecision {
-    // 미시드(open/restore 시딩 전)면 외부변경 감지 불가 → 안전 무시(스펙 §8.1).
+    // Unseeded (before open/restore seeding) means external changes can't be detected → safely ignore (spec §8.1).
     guard let syncedHash else { return .ignore }
     let fileChanged = (fileHash != syncedHash)
-    if !fileChanged { return .ignore }                 // F=false 가드(맨 앞) — touch-only/자기저장 재-arm 헛 배너 방지
-    if fileHash == stickerHash { return .converged }   // 수렴
+    if !fileChanged { return .ignore }                 // F=false guard (up front): prevents a spurious banner from touch-only / self-save re-arm
+    if fileHash == stickerHash { return .converged }   // converged
     let dirty = isEditing || (stickerHash != syncedHash)
     return dirty ? .conflict : .autoApply
 }
