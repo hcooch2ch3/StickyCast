@@ -8,15 +8,16 @@ Pop selected Markdown from MarkEdit onto your macOS desktop as a floating sticky
 
 It has two parts:
 
-- The **MarkEdit extension** (`extension/`) sends the current selection through a `sticky://` URL scheme.
+- A **sender** — the **MarkEdit extension** (`extension/`) or the **Obsidian plugin** (`obsidian/`) — sends the current selection through a `sticky://` URL scheme.
 - The **StickyCast companion app** (`app/`) catches that URL and draws it as a translucent sticky window. Only notes you pin with 📌 stay above other windows.
 
-The two are coupled by exactly one thing: the custom `sticky://` URL scheme.
+The two are coupled by exactly one thing: the custom `sticky://` URL scheme. The app never learns which editor sent a note, so any sender that speaks the scheme works.
 
 ## Requirements
 
 - **StickyCast app**: macOS 14 or later.
 - **MarkEdit**: [MarkEdit](https://github.com/MarkEdit-app/MarkEdit). The Homebrew cask (`brew install --cask markedit`) currently needs macOS 15+, so on macOS 14 grab a compatible build from the [GitHub releases](https://github.com/MarkEdit-app/MarkEdit/releases) instead.
+- **Obsidian plugin** (optional): Obsidian 1.4 or later, on macOS.
 - **To build**: Swift 5.9+ (Xcode or the CLI toolchain) and Node 18+.
 
 ## Install
@@ -44,11 +45,24 @@ npm run deploy     # build, then copy to MarkEdit's scripts directory
 
 Restart MarkEdit and you'll find **Extensions ▸ Pop as Sticky**.
 
+### 3. Obsidian plugin (optional)
+
+macOS only, and the companion app must be running. There's no prebuilt bundle yet, so build it once:
+
+```bash
+cd obsidian
+npm install
+npm run build
+```
+
+Copy `manifest.json` (repo root) and `obsidian/main.js` into `<vault>/.obsidian/plugins/stickycast/`, then enable **StickyCast** under Settings ▸ Community plugins. A community-store listing is planned.
+
 ## Using it
 
-Three ways to make a sticky:
+Four ways to make a sticky:
 
 - **From MarkEdit**: select some Markdown, then **Extensions ▸ Pop as Sticky**.
+- **From Obsidian**: select some Markdown, then run **Pop as Sticky** from the command palette, the ribbon icon, or the editor right-click menu. With nothing selected, it sends the whole note.
 - **From the clipboard**: menu bar icon ▸ **Sticky from clipboard**.
 - **From a file**: menu bar icon ▸ **Open Markdown file…**, or drag a `.md` onto the menu bar icon. A sticky opened from a file stays linked to it (see below).
 
@@ -77,7 +91,8 @@ Position, size, opacity, pin state, and color are saved and restored across rest
 
 ```bash
 cd app && swift test          # unit tests for the core logic (parser, store)
-cd extension && npm test      # unit tests for encoding
+cd extension && npm test      # unit tests for encoding, plus the Obsidian copy/derive guards
+cd obsidian && npm run build  # bundle the Obsidian plugin to obsidian/main.js
 ```
 
 ## License and credits
