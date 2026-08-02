@@ -1,9 +1,11 @@
-import { Plugin, Notice, Modal, App, getIconIds } from "obsidian";
-import { buildStickyURL } from "../../extension/src/encoding";
-import { MAX_CONTENT_BYTES } from "../../extension/src/limits";
-import { makeContent, sha256Hex } from "./spike";
+import { Plugin, Notice, MarkdownView, getIconIds, type Editor } from "obsidian";
+import { buildStickyURL } from "./encoding";
+import { MAX_CONTENT_BYTES } from "./limits";
+import { deriveContent } from "./derive";
 
-function requireElectronShell(): { openExternal(url: string): Promise<void> } | null {
+const MAX_MB = Math.round(MAX_CONTENT_BYTES / (1024 * 1024));
+
+function electronShell(): { openExternal(url: string): Promise<void> } | null {
   try {
     return (window as any).require?.("electron")?.shell ?? null;
   } catch {
@@ -11,70 +13,70 @@ function requireElectronShell(): { openExternal(url: string): Promise<void> } | 
   }
 }
 
-class ByteCountModal extends Modal {
-  constructor(app: App, private onSubmit: (n: number) => void) { super(app); }
-  onOpen() {
-    this.titleEl.setText("Spike: byte count to fire");
-    const input = this.contentEl.createEl("input", { type: "number" });
-    input.value = "1048576"; // set explicitly — DomElementInfo may not pre-fill number inputs
-    const btn = this.contentEl.createEl("button", { text: "Fire" });
-    const submit = () => {
-      const n = Number(input.value); // Number, not parseInt: "1e6" → 1000000, "3.7" → rejected below
-      this.close();
-      if (Number.isInteger(n) && n > 0) this.onSubmit(n);
-    };
-    btn.onclick = submit;
-    input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
-  }
-  onClose() { this.contentEl.empty(); }
-}
-
-export default class StickyCastSpikePlugin extends Plugin {
+export default class StickyCastPlugin extends Plugin {
   onload() {
-    this.addCommand({
-      id: "spike-probe",
-      name: "(spike) probe environment",
-      callback: () => {
-        const shell = requireElectronShell();
-        const hasIcon = getIconIds().includes("sticky-note");
-        const msg = `electron.shell: ${shell ? "OK" : "MISSING"} | sticky-note icon: ${hasIcon ? "OK" : "MISSING"}`;
-        console.log("[stickycast-spike]", msg);
-        new Notice(msg);
-      },
-    });
+    // Gate 1 residual: confirm the launch API is reachable in this Obsidian build.
+    if (!electronShell()) {
+      console.warn("[stickycast] electron.shell unavailable — Pop as Sticky will not launch here.");
+    }
+    // Spec §6: verify the ribbon/menu icon name still resolves (guards against a deprecated glyph).
+    if (!getIconIds().includes("sticky-note")) {
+      console.warn("[stickycast] 'sticky-note' icon not found — ribbon/menu icon may render blank.");
+    }
 
     this.addCommand({
-      id: "spike-fire",
-      name: "(spike) fire N bytes",
-      callback: () => new ByteCountModal(this.app, (n) => void this.fire(n)).open(),
+      id: "pop-as-sticky",
+      name: "Pop as Sticky",
+      editorCallback: (editor) => this.pop(editor),
     });
-  }
 
-  private async fire(bytes: number) {
-    // Everything is inside try so a throw (OOM building the string, crypto missing)
-    // surfaces instead of being swallowed by the `void this.fire(n)` call site.
-    try {
-      const content = makeContent(bytes);
-      const hash = sha256Hex(content);
-      const url = buildStickyURL(content, MAX_CONTENT_BYTES);
-      if (url === null) {
-        const msg = `over content cap (${MAX_CONTENT_BYTES} bytes) — not fired`;
-        console.log("[stickycast-spike]", msg);
-        new Notice(msg);
+    this.addRibbonIcon("sticky-note", "Pop as Sticky", () => {
+      const editor =
+        this.app.workspace.activeEditor?.editor ??
+        this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+      if (!editor) {
+        new Notice("No active Markdown editor.");
         return;
       }
-      console.log("[stickycast-spike] FIRE", { bytes, urlChars: url.length, sha256: hash });
-      const shell = requireElectronShell();
-      if (!shell) { new Notice("electron.shell unavailable — cannot fire"); return; }
-      // A resolved openExternal does NOT prove macOS delivered the full URL — whether it
-      // truncates silently vs rejects is exactly what Gate 1 measures. A reject lands in
-      // catch; the only valid PASS is a materialized sticker whose exported sha256 equals
-      // the logged hash, not this Notice.
-      await shell.openExternal(url);
-      new Notice(`fired ${bytes} bytes (sha256 ${hash.slice(0, 12)}…) — verify via export, not this notice`);
-    } catch (e) {
-      console.error("[stickycast-spike] fire() threw/rejected", e);
-      new Notice("fire failed — see console");
+      this.pop(editor);
+    });
+
+    this.registerEvent(
+      this.app.workspace.on("editor-menu", (menu, editor) => {
+        menu.addItem((item) =>
+          item.setTitle("Pop as Sticky").setIcon("sticky-note").onClick(() => this.pop(editor)),
+        );
+      }),
+    );
+  }
+
+  private pop(editor: Editor) {
+    if (process.platform !== "darwin") {
+      new Notice("StickyCast is macOS-only.");
+      return;
     }
+    const content = deriveContent(
+      editor.listSelections(),
+      (from, to) => editor.getRange(from, to),
+      () => editor.getValue(),
+    );
+    if (content.trim().length === 0) {
+      new Notice("Nothing to pop — the document or selection is empty.");
+      return;
+    }
+    const url = buildStickyURL(content, MAX_CONTENT_BYTES);
+    if (url === null) {
+      new Notice(`A sticky can hold about ${MAX_MB}MB. Select a smaller part and try again.`);
+      return;
+    }
+    const shell = electronShell();
+    if (!shell) {
+      new Notice("Cannot launch: electron.shell is unavailable.");
+      return;
+    }
+    void shell.openExternal(url).catch((e) => {
+      console.error("[stickycast] openExternal failed", e);
+      new Notice("Failed to launch the sticky — see console.");
+    });
   }
 }
