@@ -24,22 +24,15 @@ export default class StickyCastPlugin extends Plugin {
       console.warn("[stickycast] 'sticky-note' icon not found — ribbon/menu icon may render blank.");
     }
 
+    // Plain callback (not editorCallback) so the command still works when focus is on the
+    // ribbon, command palette, or another pane — popActive() resolves the target editor itself.
     this.addCommand({
       id: "pop-as-sticky",
       name: "Pop as Sticky",
-      editorCallback: (editor) => this.pop(editor),
+      callback: () => this.popActive(),
     });
 
-    this.addRibbonIcon("sticky-note", "Pop as Sticky", () => {
-      const editor =
-        this.app.workspace.activeEditor?.editor ??
-        this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
-      if (!editor) {
-        new Notice("No active Markdown editor.");
-        return;
-      }
-      this.pop(editor);
-    });
+    this.addRibbonIcon("sticky-note", "Pop as Sticky", () => this.popActive());
 
     this.registerEvent(
       this.app.workspace.on("editor-menu", (menu, editor) => {
@@ -48,6 +41,28 @@ export default class StickyCastPlugin extends Plugin {
         );
       }),
     );
+  }
+
+  // Resolve the note to pop for the command/ribbon (which aren't handed an editor).
+  // Falls back progressively so clicking the ribbon (which moves focus off the note) still works.
+  private resolveEditor(): Editor | null {
+    const w = this.app.workspace;
+    const focused = w.activeEditor?.editor;
+    if (focused) return focused;
+    const activeView = w.getActiveViewOfType(MarkdownView);
+    if (activeView?.editor) return activeView.editor;
+    const recent = w.getMostRecentLeaf();
+    if (recent?.view instanceof MarkdownView && recent.view.editor) return recent.view.editor;
+    return null;
+  }
+
+  private popActive() {
+    const editor = this.resolveEditor();
+    if (!editor) {
+      new Notice("Open a Markdown note to pop as a sticky.");
+      return;
+    }
+    this.pop(editor);
   }
 
   private pop(editor: Editor) {
