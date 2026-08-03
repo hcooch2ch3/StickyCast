@@ -1,10 +1,13 @@
-import { Plugin, Notice, MarkdownView, getIconIds, type Editor } from "obsidian";
+import { Plugin, Notice, MarkdownView, type Editor } from "obsidian";
 import { buildStickyURL } from "./encoding";
 import { MAX_CONTENT_BYTES } from "./limits";
 import { deriveContent } from "./derive";
 
 const MAX_MB = Math.round(MAX_CONTENT_BYTES / (1024 * 1024));
 
+// We launch the sticky:// URL through Electron's shell rather than window.location: Obsidian
+// intercepts in-page scheme navigations, and there is no first-party API to fire a custom
+// external scheme. Guarded so a renderer without node integration degrades to a Notice.
 function electronShell(): { openExternal(url: string): Promise<void> } | null {
   try {
     return (window as any).require?.("electron")?.shell ?? null;
@@ -15,13 +18,9 @@ function electronShell(): { openExternal(url: string): Promise<void> } | null {
 
 export default class StickyCastPlugin extends Plugin {
   onload() {
-    // Gate 1 residual: confirm the launch API is reachable in this Obsidian build.
+    // Launch API reachability: warns only when the shell is missing, so a healthy install is silent.
     if (!electronShell()) {
       console.warn("[stickycast] electron.shell unavailable — Pop as Sticky will not launch here.");
-    }
-    // Spec §6: verify the ribbon/menu icon name still resolves (guards against a deprecated glyph).
-    if (!getIconIds().includes("sticky-note")) {
-      console.warn("[stickycast] 'sticky-note' icon not found — ribbon/menu icon may render blank.");
     }
 
     // Plain callback (not editorCallback) so the command still works when focus is on the
@@ -51,6 +50,8 @@ export default class StickyCastPlugin extends Plugin {
     if (focused) return focused;
     const activeView = w.getActiveViewOfType(MarkdownView);
     if (activeView?.editor) return activeView.editor;
+    // With several markdown panes and focus off all of them, this picks the most recently
+    // active one (Obsidian's own "active pane" notion) — the intuitive target.
     const recent = w.getMostRecentLeaf();
     if (recent?.view instanceof MarkdownView && recent.view.editor) return recent.view.editor;
     return null;

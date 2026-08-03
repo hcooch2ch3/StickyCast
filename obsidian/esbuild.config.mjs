@@ -18,7 +18,7 @@ const ctx = await esbuild.context({
   sourcemap: prod ? false : "inline",
   treeShaking: true,
   outfile: "main.js",
-  platform: "node", // auto-externalizes node builtins (spike.ts uses `crypto`)
+  platform: "node", // node platform: auto-externalizes node builtins and keeps process/window.require intact
 });
 
 if (prod) { await ctx.rebuild(); process.exit(0); }
