@@ -8,15 +8,16 @@ MarkEdit에서 선택한 마크다운을 macOS 데스크탑에 **플로팅 스�
 
 두 컴포넌트로 구성됩니다:
 
-- **MarkEdit 확장**(`extension/`)은 에디터에서 선택한 마크다운을 `sticky://` URL 스킴을 통해 전송합니다.
+- **발신 측** — **MarkEdit 확장**(`extension/`) 또는 **Obsidian 플러그인**(`obsidian/`) — 이 에디터에서 선택한 마크다운을 `sticky://` URL 스킴을 통해 전송합니다.
 - **컴패니언 앱 StickyCast**(`app/`)는 URL을 받아 데스크탑에 반투명 스티커 창으로 표시합니다(📌로 고정한 것만 항상 위).
 
-두 컴포넌트는 커스텀 URL 스킴 하나(`sticky://`)로만 느슨하게 연결됩니다.
+두 컴포넌트는 커스텀 URL 스킴 하나(`sticky://`)로만 느슨하게 연결됩니다. 앱은 어느 에디터가 보냈는지 모르므로, 이 스킴만 말할 줄 알면 어떤 발신 측이든 동작합니다.
 
 ## 요구사항
 
 - **StickyCast 앱**: macOS 14 이상
 - **MarkEdit**: [MarkEdit](https://github.com/MarkEdit-app/MarkEdit). Homebrew cask(`brew install --cask markedit`)는 현재 macOS 15 이상을 요구하므로, macOS 14에서는 [GitHub 릴리스](https://github.com/MarkEdit-app/MarkEdit/releases)에서 호환 버전을 직접 설치하세요.
+- **Obsidian 플러그인**(선택): macOS의 Obsidian 1.4 이상.
 - 빌드: Swift 5.9+ (Xcode 또는 CLI 툴체인), Node 18+
 
 ## 설치
@@ -44,11 +45,24 @@ npm run deploy     # 빌드 후 MarkEdit scripts 디렉토리로 배포
 
 MarkEdit을 재시작하면 **Extensions ▸ Pop as Sticky** 메뉴가 나타납니다.
 
+### 3. Obsidian 플러그인 (선택)
+
+macOS 전용이며, 컴패니언 앱이 실행 중이어야 합니다. 아직 미리 빌드된 번들이 없으므로 한 번 빌드하세요.
+
+```bash
+cd obsidian
+npm install
+npm run build
+```
+
+`manifest.json`(리포 루트)과 `obsidian/main.js`를 `<보관함>/.obsidian/plugins/stickycast/`에 복사한 뒤, 설정 ▸ 커뮤니티 플러그인에서 **StickyCast**를 켜세요. 커뮤니티 스토어 등록은 예정되어 있습니다.
+
 ## 사용
 
-스티커를 만드는 방법은 세 가지입니다.
+스티커를 만드는 방법은 네 가지입니다.
 
 - **MarkEdit에서**: 마크다운을 선택한 뒤 **Extensions ▸ Pop as Sticky** 클릭.
+- **Obsidian에서**: 마크다운을 선택한 뒤 명령 팔레트, 리본 아이콘, 또는 에디터 우클릭 메뉴에서 **Pop as Sticky** 실행. 선택이 없으면 노트 전체를 보냅니다.
 - **클립보드에서**: 메뉴바 아이콘 ▸ **클립보드에서 스티커**.
 - **파일에서**: 메뉴바 아이콘 ▸ **마크다운 파일 열기…**, 또는 `.md` 파일을 메뉴바 아이콘에 드래그. 파일로 연 스티커는 그 파일에 연결됩니다(아래 Live Sync 참고).
 
@@ -77,7 +91,8 @@ MarkEdit을 재시작하면 **Extensions ▸ Pop as Sticky** 메뉴가 나타납
 
 ```bash
 cd app && swift test          # 코어 로직 단위 테스트 (파서, 스토어)
-cd extension && npm test      # 인코딩 단위 테스트
+cd extension && npm test      # 인코딩 단위 테스트 + Obsidian 복사본·도출 가드
+cd obsidian && npm run build  # Obsidian 플러그인을 obsidian/main.js로 번들
 ```
 
 ## 라이선스와 크레딧
