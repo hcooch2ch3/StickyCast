@@ -1,4 +1,5 @@
 import SwiftUI
+import StickyCastCore
 
 /// Sticky-note preset color palette. Persisted as the rawValue key (String); the actual Color mapping lives here (app side).
 /// StickyNote.color holds this key; nil means the default background (windowBackgroundColor).
@@ -19,11 +20,11 @@ enum StickyPalette: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .yellow: return "노랑"
-        case .pink:   return "분홍"
-        case .blue:   return "파랑"
-        case .green:  return "초록"
-        case .purple: return "보라"
+        case .yellow: return L10n.colorYellow()
+        case .pink:   return L10n.colorPink()
+        case .blue:   return L10n.colorBlue()
+        case .green:  return L10n.colorGreen()
+        case .purple: return L10n.colorPurple()
         }
     }
 

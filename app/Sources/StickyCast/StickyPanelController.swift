@@ -58,10 +58,10 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
                 case .success:
                     return true
                 case .failure(.contentTooLarge):
-                    onError("스티커 내용이 너무 큽니다 (최대 약 \(StickyStore.maxContentBytes / (1024 * 1024))MB).")
+                    onError(L10n.contentTooLargeMB())
                     return false
                 case .failure:
-                    onError("편집 내용을 저장하지 못했습니다.")
+                    onError(L10n.couldNotSaveEdits())
                     return false
                 }
             },

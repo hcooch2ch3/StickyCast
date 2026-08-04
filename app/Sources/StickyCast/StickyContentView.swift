@@ -1,5 +1,6 @@
 import SwiftUI
 import MarkdownUI
+import StickyCastCore
 
 struct StickyContentView: View {
     @ObservedObject var vm: StickyViewModel     // reactive content, banner, edit state
@@ -129,7 +130,7 @@ struct StickyContentView: View {
                 }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(StickyPalette(rawValue: key ?? "")?.label ?? "기본")
+        .accessibilityLabel(StickyPalette(rawValue: key ?? "")?.label ?? L10n.defaultColorLabel())
     }
 
     private func flashSaveResult(_ ok: Bool) {
@@ -147,7 +148,7 @@ struct StickyContentView: View {
                     Image(systemName: "xmark.circle.fill").imageScale(.medium)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("스티커 닫기")
+                .accessibilityLabel(L10n.closeSticker())
 
                 Button(action: { pinned.toggle(); onTogglePin(pinned) }) {
                     Image(systemName: pinned ? "pin.fill" : "pin")
@@ -155,7 +156,7 @@ struct StickyContentView: View {
                         .foregroundStyle(pinned ? Color.accentColor : Color.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(pinned ? "핀 해제" : "핀 고정")
+                .accessibilityLabel(pinned ? L10n.unpin() : L10n.pin())
 
                 // color: swatch popover (sticky-note presets)
                 if onColorChange != nil {
@@ -165,7 +166,7 @@ struct StickyContentView: View {
                             .foregroundStyle(StickyPalette.color(forKey: colorKey) != nil ? .primary : .secondary)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("색상")
+                    .accessibilityLabel(L10n.color())
                     .popover(isPresented: $showColorPicker, arrowEdge: .bottom) {
                         HStack(spacing: 8) {
                             colorSwatch(key: nil, color: nil)   // default
@@ -185,7 +186,7 @@ struct StickyContentView: View {
                 .onChange(of: opacity) { _, v in onOpacityChange(v) }
                 .controlSize(.mini)
                 .frame(width: 70)
-                .accessibilityLabel("투명도")
+                .accessibilityLabel(L10n.opacity())
 
                 // edit button: editable stickers only (onContentChange != nil). Alternate entry point to double-click
                 if onContentChange != nil, !isEditing {
@@ -193,7 +194,7 @@ struct StickyContentView: View {
                         Image(systemName: "pencil").imageScale(.medium)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("편집")
+                    .accessibilityLabel(L10n.edit())
                 }
                 // 🔗 link indicator / popover: file-linked stickers only
                 if vm.isLinked, !isEditing {
@@ -201,13 +202,13 @@ struct StickyContentView: View {
                         Image(systemName: "link").imageScale(.medium).foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("파일 연결")
+                    .accessibilityLabel(L10n.fileLink())
                     .popover(isPresented: $showLinkPopover, arrowEdge: .bottom) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Button("Finder에서 보기") { showLinkPopover = false; onRevealInFinder?() }
-                            Button("원본 편집기로 열기") { showLinkPopover = false; onOpenInEditor?() }
+                            Button(L10n.showInFinder()) { showLinkPopover = false; onRevealInFinder?() }
+                            Button(L10n.openInEditor()) { showLinkPopover = false; onOpenInEditor?() }
                             Divider()
-                            Button("연결 해제") { showLinkPopover = false; onDetach?() }
+                            Button(L10n.detach()) { showLinkPopover = false; onDetach?() }
                         }
                         .buttonStyle(.plain)
                         .padding(10)
@@ -223,8 +224,8 @@ struct StickyContentView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(saveFlash != nil)
-                    .accessibilityLabel(saveFlash == .success ? "저장됨" : "원본 파일에 저장")
-                    .help("원본 파일에 저장")
+                    .accessibilityLabel(saveFlash == .success ? L10n.saved() : L10n.saveToSourceFile())
+                    .help(L10n.saveToSourceFile())
                 }
             }
             .padding(.horizontal, 8).padding(.vertical, 5)
@@ -234,10 +235,10 @@ struct StickyContentView: View {
             if vm.syncBanner == .conflict {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                    Text("파일과 스티커가 모두 변경됨").font(.caption)
+                    Text(L10n.bothChanged()).font(.caption)
                     Spacer(minLength: 4)
-                    Button("파일 가져오기") { onTakeFile?() }
-                    Button("내 편집 유지") { vm.syncBanner = nil }
+                    Button(L10n.takeFile()) { onTakeFile?() }
+                    Button(L10n.keepMyEdits()) { vm.syncBanner = nil }
                 }
                 .controlSize(.small)
                 .padding(.horizontal, 8).padding(.vertical, 5)
@@ -247,7 +248,7 @@ struct StickyContentView: View {
             if vm.oversize {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.circle").foregroundStyle(.red)
-                    Text("연결 파일이 너무 큼 (최대 1MB) — 반영 안 됨").font(.caption2).foregroundStyle(.secondary)
+                    Text(L10n.linkedFileTooLarge()).font(.caption2).foregroundStyle(.secondary)
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 8).padding(.vertical, 3)
@@ -264,9 +265,9 @@ struct StickyContentView: View {
                         .onExitCommand(perform: cancelEdit)   // Esc → cancel
                     HStack(spacing: 8) {
                         Spacer()
-                        Button("취소", action: cancelEdit)
+                        Button(L10n.cancel(), action: cancelEdit)
                             .keyboardShortcut(.cancelAction)
-                        Button("저장", action: commitEdit)
+                        Button(L10n.save(), action: commitEdit)
                             .keyboardShortcut(.return, modifiers: .command)   // ⌘Enter → save
                     }
                     .controlSize(.small)

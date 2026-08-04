@@ -6,7 +6,7 @@ import StickyCastCore
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var store: StickyStore!
     private(set) var controllers: [UUID: StickyPanelController] = [:]  // strong reference; drop it and the panel disappears
-    private(set) var recentErrors: [String] = []  // menu bar "최근 오류"
+    private(set) var recentErrors: [String] = []  // menu bar "Recent errors"
     private var statusMenu: StatusMenuController!
     let fileWatcher = FileWatcher()               // Live Sync: watch linked sticker files
     private var suppressedNotes: Set<UUID> = []   // ⬆️ suppress the self-write right after saving
@@ -62,7 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Cheap URL length cut before parsing (block huge URLs before decoding, by byte count). The exact content limit is enforced by store.add().
         // Measure bytes with .utf8.count so a rogue URL full of multibyte chars can't dodge the cut by undercounting via grapheme count.
         guard url.absoluteString.utf8.count <= maxReceivedURLLength else {
-            reportError("스티커 내용이 너무 큽니다.")
+            reportError(L10n.contentTooLarge())
             return
         }
         switch StickyURLParser.parse(url) {
@@ -78,9 +78,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .success(let note):
             addController(for: note)   // a new sticker comes up via show() → anyStickerVisible becomes true automatically
         case .failure(.capReached):
-            reportError("스티커가 최대 \(StickyStore.maxStickies)장입니다. 기존 스티커를 닫아 주세요.")
+            reportError(L10n.maxStickiesReached(StickyStore.maxStickies))
         case .failure(.contentTooLarge):
-            reportError("스티커 내용이 너무 큽니다 (최대 약 \(StickyStore.maxContentBytes / (1024 * 1024))MB).")
+            reportError(L10n.contentTooLargeMB())
         case .failure(.noteNotFound):
             break   // add never returns this error (defensive, to make the switch exhaustive)
         }
@@ -94,9 +94,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // If restore dropped any notes, tell the user instead of failing silently (consistent with the receive path).
         guard outcome.hasDrops else { return }
         var parts: [String] = []
-        if outcome.droppedOversize > 0 { parts.append("크기 초과 \(outcome.droppedOversize)개") }
-        if outcome.droppedOverCap > 0 { parts.append("최대 장수 초과 \(outcome.droppedOverCap)개") }
-        reportError("이전 스티커 \(parts.joined(separator: ", "))를 복원하지 못했습니다.")
+        if outcome.droppedOversize > 0 { parts.append(L10n.restoreOversize(outcome.droppedOversize)) }
+        if outcome.droppedOverCap > 0 { parts.append(L10n.restoreOverCap(outcome.droppedOverCap)) }
+        reportError(L10n.restoreFailed(parts.joined(separator: ", ")))
     }
 
     private func addController(for note: StickyNote) {
@@ -172,13 +172,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Linked file deleted (still absent after debounce and resolve) → "keep (detach) / close" dialog.
     private func handleDeletedFile(noteID: UUID) {
         guard let note = store.notes.first(where: { $0.id == noteID }) else { return }
-        let name = (note.sourcePath as NSString?)?.lastPathComponent ?? "파일"
+        let name = (note.sourcePath as NSString?)?.lastPathComponent ?? L10n.unnamedFile()
         let alert = NSAlert()
-        alert.messageText = "연결된 파일을 찾을 수 없습니다"
-        alert.informativeText = "'\(name)'이(가) 삭제/이동됐습니다. 스티커를 어떻게 할까요? (현재 내용은 보존됩니다)"
+        alert.messageText = L10n.linkedFileNotFound()
+        alert.informativeText = L10n.linkedFileMissingBody(name)
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "유지 (독립 전환)")
-        alert.addButton(withTitle: "닫기")
+        alert.addButton(withTitle: L10n.keepDetach())
+        alert.addButton(withTitle: L10n.close())
         NSApp.activate()
         if alert.runModal() == .alertFirstButtonReturn {
             detachNote(id: noteID)          // keep → detach (content preserved)
@@ -247,11 +247,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: Convenience features Phase 1: clipboard, open file, export
 
-    /// Create a standalone sticker from clipboard text. Menu bar "클립보드에서 스티커".
+    /// Create a standalone sticker from clipboard text. Menu bar "New sticker from clipboard".
     func createStickyFromClipboard() {
         guard let raw = NSPasteboard.general.string(forType: .string),
               !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            reportError("클립보드에 붙여넣을 텍스트가 없습니다.")
+            reportError(L10n.clipboardEmpty())
             return
         }
         createSticky(content: raw)   // the content byte cap is enforced by store.add() (single source)
@@ -280,7 +280,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let exts: Set<String> = ["md", "markdown"]
         let mdURLs = urls.filter { exts.contains($0.pathExtension.lowercased()) }
         guard !mdURLs.isEmpty else {
-            reportError("마크다운(.md/.markdown) 파일만 열 수 있습니다.")
+            reportError(L10n.onlyMarkdown())
             return
         }
         // Multi-drop: instead of one notification per file, group failures by type and report up to 3 aggregates (avoid a notification storm).
@@ -295,9 +295,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .readFailed: readFail.append(url.lastPathComponent)
             }
         }
-        if capHit { reportError("스티커가 최대 \(StickyStore.maxStickies)장이라 일부 파일을 열지 못했습니다.") }
-        if !tooLarge.isEmpty { reportError("파일이 너무 큽니다: \(tooLarge.joined(separator: ", "))") }
-        if !readFail.isEmpty { reportError("읽을 수 없는 파일: \(readFail.joined(separator: ", "))") }
+        if capHit { reportError(L10n.capReachedSomeFiles(StickyStore.maxStickies)) }
+        if !tooLarge.isEmpty { reportError(L10n.filesTooLarge(tooLarge.joined(separator: ", "))) }
+        if !readFail.isEmpty { reportError(L10n.unreadableFiles(readFail.joined(separator: ", "))) }
     }
 
     /// openFile result: the caller decides how to report (single = immediate, multi-drop = aggregate).
@@ -334,9 +334,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func reportOpenFailure(_ outcome: OpenOutcome, _ name: String) {
         switch outcome {
         case .ok: break
-        case .readFailed: reportError("파일을 읽을 수 없습니다 (\(name)). UTF-8 텍스트인지 확인해 주세요.")
-        case .capReached: reportError("스티커가 최대 \(StickyStore.maxStickies)장입니다. 기존 스티커를 닫아 주세요.")
-        case .tooLarge: reportError("파일이 너무 큽니다 (최대 약 \(StickyStore.maxContentBytes / (1024 * 1024))MB).")
+        case .readFailed: reportError(L10n.couldNotReadFile(name))
+        case .capReached: reportError(L10n.maxStickiesReached(StickyStore.maxStickies))
+        case .tooLarge: reportError(L10n.fileTooLargeMB())
         }
     }
 
@@ -348,7 +348,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func saveNoteToSourceFile(id: UUID) -> Bool {
         guard let note = store.notes.first(where: { $0.id == id }), note.sourcePath != nil else { return false }
         guard let resolved = resolveSourceURL(note: note) else {
-            reportError("원본 파일을 찾을 수 없습니다. 이동/삭제됐을 수 있습니다.")
+            reportError(L10n.sourceNotFound())
             return false
         }
         // Resolve symlinks to the real target before writing: prevents atomically:true's rename from replacing
@@ -374,19 +374,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.suppressedNotes.remove(id) }
             return true
         } catch {
-            reportError("원본 파일에 저장하지 못했습니다 (\(url.lastPathComponent)).")
+            reportError(L10n.couldNotSaveToSource(url.lastPathComponent))
             return false
         }
     }
 
-    /// Overwrite confirmation shown only when the source changed externally. Returns true only if the user picks "덮어쓰기".
+    /// Overwrite confirmation shown only when the source changed externally. Returns true only if the user picks "Overwrite".
     private func confirmOverwrite(fileName: String) -> Bool {
         let alert = NSAlert()
-        alert.messageText = "원본 파일이 외부에서 변경되었습니다"
-        alert.informativeText = "'\(fileName)'을(를) 스티커 내용으로 덮어쓰면 외부 변경분이 사라집니다. 계속할까요?"
+        alert.messageText = L10n.sourceChangedExternally()
+        alert.informativeText = L10n.overwriteBody(fileName)
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "덮어쓰기")
-        alert.addButton(withTitle: "취소")
+        alert.addButton(withTitle: L10n.overwrite())
+        alert.addButton(withTitle: L10n.cancel())
         NSApp.activate()
         return alert.runModal() == .alertFirstButtonReturn
     }
@@ -404,7 +404,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return nil
     }
 
-    /// Save the sticker body as .md. Menu bar "스티커 내보내기 ▸ <노트>".
+    /// Save the sticker body as .md. Menu bar "Export sticker ▸ <note>".
     func exportNote(id: UUID) {
         guard let note = store.notes.first(where: { $0.id == id }) else { return }
         let panel = NSSavePanel()
@@ -415,7 +415,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             try note.content.write(to: url, atomically: true, encoding: .utf8)
         } catch {
-            reportError("내보내기에 실패했습니다 (\(url.lastPathComponent)).")
+            reportError(L10n.exportFailed(url.lastPathComponent))
         }
     }
 
@@ -442,19 +442,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               let probe = URL(string: "sticky://new") else { return }
         let myID = Bundle.main.bundleIdentifier
         guard let handlerURL = NSWorkspace.shared.urlForApplication(toOpen: probe) else {
-            reportError("sticky:// 핸들러가 등록되지 않았습니다. 스티커 발사가 동작하지 않습니다 — 앱을 다시 설치해 주세요.")
+            reportError(L10n.handlerNotRegistered())
             return
         }
         if Bundle(url: handlerURL)?.bundleIdentifier != myID {
-            reportError("sticky:// 핸들러가 이 앱이 아닙니다 (현재: \(handlerURL.lastPathComponent)). 앱을 다시 설치해 주세요.")
+            reportError(L10n.handlerNotThisApp(handlerURL.lastPathComponent))
         }
     }
 
     private func errorMessage(for error: StickyURLError) -> String {
         switch error {
-        case .unknownHost: return "지원하지 않는 요청입니다 (v1은 sticky://new만 지원)."
-        case .missingContent: return "내용이 비어 있습니다."
-        case .invalidEncoding: return "내용을 해석할 수 없습니다 (인코딩 오류)."
+        case .unknownHost: return L10n.urlUnknownHost()
+        case .missingContent: return L10n.urlMissingContent()
+        case .invalidEncoding: return L10n.urlInvalidEncoding()
         }
     }
 }
