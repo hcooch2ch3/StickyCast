@@ -51,7 +51,7 @@ final class FileWatcherTests: XCTestCase {
         let done = expectation(description: "settle")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { done.fulfill() }
         wait(for: [done], timeout: 3)
-        XCTAssertEqual(pingsAfterUnwatch, 0, "unwatch 후 재-arm ping이 발화하면 안 됨")
+        XCTAssertEqual(pingsAfterUnwatch, 0, "a re-arm ping must not fire after unwatch")
         w.unwatchAll()
         try? FileManager.default.removeItem(atPath: dir)
     }
@@ -79,7 +79,7 @@ final class FileWatcherTests: XCTestCase {
         let done = expectation(description: "settle")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { done.fulfill() }
         wait(for: [done], timeout: 3)
-        XCTAssertEqual(pingsAfterUnwatch, 0, "unwatchAll 후 mid-rearm ping이 발화하면 안 됨")
+        XCTAssertEqual(pingsAfterUnwatch, 0, "a mid-rearm ping must not fire after unwatchAll")
         try? FileManager.default.removeItem(atPath: dir)
     }
 }

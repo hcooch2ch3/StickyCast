@@ -12,7 +12,7 @@ final class StickyURLParserTests: XCTestCase {
         XCTAssertEqual(StickyURLParser.parse(url), .success("hi"))
     }
     func testGoldenVector_Underscore() {
-        // the "읽기???" vector contains '_' (the most fragile _→/ reverse-mapping path)
+        // this vector contains '_' (the most fragile _→/ reverse-mapping path)
         let url = URL(string: "sticky://new?content=7J296riwPz8_")!
         XCTAssertEqual(StickyURLParser.parse(url), .success("읽기???"))
     }

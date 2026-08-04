@@ -107,7 +107,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(makeItem(L10n.closeAll(), #selector(closeAll)))
         menu.addItem(.separator())
         menu.addItem(makeItem(L10n.aboutStickyCast(), #selector(showAbout)))
-        // Language override submenu (System / English / 한국어). Checkmark on the active choice.
+        // Language override submenu (System / English / Korean). Checkmark on the active choice.
         let langItem = NSMenuItem(title: L10n.languageMenu(), action: nil, keyEquivalent: "")
         let langSub = NSMenu()
         let options: [(String, LanguageOverride)] = [

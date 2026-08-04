@@ -8,8 +8,8 @@ DEST="$CONTAINER/scripts"
 
 # Check that MarkEdit is installed and initialized (gives a clear diagnostic instead of an opaque cp failure)
 if [ ! -d "$CONTAINER" ]; then
-  echo "error: MarkEdit이 설치·초기화되지 않았습니다 ($CONTAINER 없음)." >&2
-  echo "       MarkEdit을 한 번 실행해 컨테이너를 생성한 뒤 다시 시도하세요." >&2
+  echo "error: MarkEdit is not installed/initialized ($CONTAINER missing)." >&2
+  echo "       Launch MarkEdit once to create the container, then retry." >&2
   exit 1
 fi
 
@@ -18,4 +18,4 @@ npm run build
 
 mkdir -p "$DEST"
 cp dist/sticky-cast.js "$DEST/"
-echo "deployed → $DEST/sticky-cast.js (MarkEdit 재시작 필요)"
+echo "deployed → $DEST/sticky-cast.js (restart MarkEdit)"

@@ -1,0 +1,120 @@
+            return "스티커가 최대 \(n)장입니다. 기존 스티커를 닫아 주세요."
+          {"id":"11111111-1111-1111-1111-111111111111","content":"레거시",
+          {"id":"11111111-1111-1111-1111-111111111111","content":"레거시",
+          {"id":"11111111-1111-1111-1111-111111111111","content":"레거시",
+          {"id":"11111111-1111-1111-1111-111111111111","content":"파일내용",
+        XCTAssertEqual(ExportNaming.filename(for: "   \n다음"), "sticker.md")
+        XCTAssertEqual(ExportNaming.filename(for: "# 회의 메모\n본문..."), "회의 메모.md")
+        XCTAssertEqual(ExportNaming.filename(for: "### 제목만"), "제목만.md")
+        XCTAssertEqual(ExportNaming.filename(for: "장보기 목록\n- 우유"), "장보기 목록.md")
+        XCTAssertEqual(L10n.closeSticker(.ko), "스티커 닫기")
+        XCTAssertEqual(StickyURLParser.parse(url), .success("안녕🎉"))
+        XCTAssertEqual(StickyURLParser.parse(url), .success("읽기???"))
+        XCTAssertEqual(n.content, "레거시")
+        XCTAssertEqual(name, String(repeating: "가", count: 40) + ".md")
+        XCTAssertEqual(s2.notes[0].syncedHash, ContentHash.sha256Hex("파일내용"))
+        XCTAssertEqual(store.notes[0].content, "수정됨")
+        XCTAssertEqual(store.notes[0].content, "작음")   // original unchanged
+        XCTAssertEqual(store.notes[0].syncedHash, ContentHash.sha256Hex("파일내용"))
+        XCTAssertEqual(store2.notes[0].content, "수정됨")
+        XCTAssertEqual(store2.notes[0].content, "안녕🎉")
+        _ = try! store.add(content: "독립").get()
+        case .ko: return "'\(fileName)'을(를) 스티커 내용으로 덮어쓰면 외부 변경분이 사라집니다. 계속할까요?"
+        case .ko: return "'\(name)'이(가) 삭제/이동됐습니다. 스티커를 어떻게 할까요? (현재 내용은 보존됩니다)"
+        case .ko: return "sticky:// 핸들러가 등록되지 않았습니다. 스티커 발사가 동작하지 않습니다 — 앱을 다시 설치해 주세요."
+        case .ko: return "sticky:// 핸들러가 이 앱이 아닙니다 (현재: \(name)). 앱을 다시 설치해 주세요."
+        case .ko: return "스티커 내용이 너무 큽니다 (최대 약 \(maxMB)MB)."
+        case .ko: return "스티커가 최대 \(n)장이라 일부 파일을 열지 못했습니다."
+        case .ko: return "연결 파일이 너무 큼 (최대 약 \(maxMB)MB) — 반영 안 됨"
+        case .ko: return "원본 파일에 저장하지 못했습니다 (\(name))."
+        case .ko: return "이전 스티커 \(parts)를 복원하지 못했습니다."
+        case .ko: return "파일을 읽을 수 없습니다 (\(name)). UTF-8 텍스트인지 확인해 주세요."
+        case .ko: return "파일이 너무 큽니다 (최대 약 \(maxMB)MB)."
+        if case .failure = store.updateContent(id: note.id, content: "수정됨") { XCTFail("normal update failed") }
+        let a = ContentHash.sha256Hex("안녕🎉 markdown\n# heading")
+        let b = ContentHash.sha256Hex("안녕🎉 markdown\n# heading")
+        let long = String(repeating: "가", count: 60)
+        let note = try! store.add(content: "# 파일 내용",
+        let note = try! store.add(content: "독립").get()
+        let note = try! store.add(content: "색").get()
+        let note = try! store.add(content: "색").get()
+        let note = try! store.add(content: "안녕🎉").get()
+        let note = try! store.add(content: "원본").get()
+        let note = try! store.add(content: "작음").get()
+        let note = try! store.add(content: "핀").get()
+        let ok = String(repeating: "가", count: charCount)
+        let over = String(repeating: "가", count: charCount + 1) // 3 more bytes → over the limit
+        switch l { case .en: "Export failed (\(name))."; case .ko: "내보내기에 실패했습니다 (\(name))." }
+        switch l { case .en: "Files too large: \(list)"; case .ko: "파일이 너무 큽니다: \(list)" }
+        switch l { case .en: "Unreadable files: \(list)"; case .ko: "읽을 수 없는 파일: \(list)" }
+        switch l { case .en: "\(n) over the size limit"; case .ko: "크기 초과 \(n)개" }
+        switch l { case .en: "\(n) over the sticker limit"; case .ko: "최대 장수 초과 \(n)개" }
+      "input": "# 제목\n- a\n- b\n\n```js\nconst x = 1;\n```",
+      "input": "가",
+      "input": "混合 mixed 텍스트 123 !@#",
+      "input": "가",
+      "input": "안녕🎉",
+      "input": "읽기???",
+    const out = toBase64URL("긴 한글 텍스트와 emoji 🎉🎉🎉 조합 ///+++");
+    expect(buildStickyURL("가", 2)).toBeNull();        // "가" = 3 bytes > 2
+    expect(buildStickyURL("가", 3)).not.toBeNull();    // 3 == 3 allowed
+    expect(buildStickyURL("안녕🎉", 1000)).toBe(URL_PREFIX + "7JWI64WV8J-OiQ");
+    expect(toBase64URL("안녕🎉")).toBe("7JWI64WV8J-OiQ");
+    expect(toBase64URL("읽기???")).toBe("7J296riwPz8_");
+    ko: "문서가 비어 있거나 공백뿐입니다. 내용을 입력하거나 일부를 선택한 뒤 다시 시도하세요.",
+    ko: `스티커는 약 ${mb}MB까지만 담을 수 있습니다. 원하는 부분만 선택한 뒤 다시 시도하세요.`,
+    public static func aboutStickyCast(_ l: Language = current) -> String { switch l { case .en: "About StickyCast"; case .ko: "StickyCast에 관하여" } }
+    public static func bothChanged(_ l: Language = current) -> String { switch l { case .en: "Both file and sticker changed"; case .ko: "파일과 스티커가 모두 변경됨" } }
+    public static func bringAllToFront(_ l: Language = current) -> String { switch l { case .en: "Bring all to front"; case .ko: "모두 앞으로" } }
+    public static func cancel(_ l: Language = current) -> String { switch l { case .en: "Cancel"; case .ko: "취소" } }
+    public static func clipboardEmpty(_ l: Language = current) -> String { switch l { case .en: "No text on the clipboard to paste."; case .ko: "클립보드에 붙여넣을 텍스트가 없습니다." } }
+    public static func close(_ l: Language = current) -> String { switch l { case .en: "Close"; case .ko: "닫기" } }
+    public static func closeAll(_ l: Language = current) -> String { switch l { case .en: "Close all"; case .ko: "모두 닫기" } }
+    public static func closeSticker(_ l: Language = current) -> String { switch l { case .en: "Close sticker"; case .ko: "스티커 닫기" } }
+    public static func color(_ l: Language = current) -> String { switch l { case .en: "Color"; case .ko: "색상" } }
+    public static func colorBlue(_ l: Language = current)   -> String { switch l { case .en: "Blue";   case .ko: "파랑" } }
+    public static func colorGreen(_ l: Language = current)  -> String { switch l { case .en: "Green";  case .ko: "초록" } }
+    public static func colorPink(_ l: Language = current)   -> String { switch l { case .en: "Pink";   case .ko: "분홍" } }
+    public static func colorPurple(_ l: Language = current) -> String { switch l { case .en: "Purple"; case .ko: "보라" } }
+    public static func colorYellow(_ l: Language = current) -> String { switch l { case .en: "Yellow"; case .ko: "노랑" } }
+    public static func contentTooLarge(_ l: Language = current) -> String { switch l { case .en: "Sticker content is too large."; case .ko: "스티커 내용이 너무 큽니다." } }
+    public static func couldNotSaveEdits(_ l: Language = current) -> String { switch l { case .en: "Couldn't save your edits."; case .ko: "편집 내용을 저장하지 못했습니다." } }
+    public static func defaultColorLabel(_ l: Language = current) -> String { switch l { case .en: "Default"; case .ko: "기본" } }
+    public static func detach(_ l: Language = current) -> String { switch l { case .en: "Detach"; case .ko: "연결 해제" } }
+    public static func edit(_ l: Language = current) -> String { switch l { case .en: "Edit"; case .ko: "편집" } }
+    public static func emptyPreview(_ l: Language = current) -> String { switch l { case .en: "(empty)"; case .ko: "(빈 내용)" } }
+    public static func exportSticker(_ l: Language = current) -> String { switch l { case .en: "Export sticker"; case .ko: "스티커 내보내기" } }
+    public static func fileLink(_ l: Language = current) -> String { switch l { case .en: "File link"; case .ko: "파일 연결" } }
+    public static func hideAll(_ l: Language = current) -> String { switch l { case .en: "Hide all"; case .ko: "모두 숨기기" } }
+    public static func keepDetach(_ l: Language = current) -> String { switch l { case .en: "Keep (detach)"; case .ko: "유지 (독립 전환)" } }
+    public static func keepMyEdits(_ l: Language = current) -> String { switch l { case .en: "Keep my edits"; case .ko: "내 편집 유지" } }
+    public static func languageKorean(_ l: Language = current) -> String { "한국어" }  // endonym: constant in both
+    public static func languageMenu(_ l: Language = current) -> String { switch l { case .en: "Language"; case .ko: "언어" } }
+    public static func languageSystem(_ l: Language = current) -> String { switch l { case .en: "System"; case .ko: "시스템" } }
+    public static func linkedFileNotFound(_ l: Language = current) -> String { switch l { case .en: "Linked file not found"; case .ko: "연결된 파일을 찾을 수 없습니다" } }
+    public static func newFromClipboard(_ l: Language = current) -> String { switch l { case .en: "New sticker from clipboard"; case .ko: "클립보드에서 스티커" } }
+    public static func noStickers(_ l: Language = current) -> String { switch l { case .en: "No stickers"; case .ko: "스티커 없음" } }
+    public static func onlyMarkdown(_ l: Language = current) -> String { switch l { case .en: "Only Markdown (.md/.markdown) files can be opened."; case .ko: "마크다운(.md/.markdown) 파일만 열 수 있습니다." } }
+    public static func opacity(_ l: Language = current) -> String { switch l { case .en: "Opacity"; case .ko: "투명도" } }
+    public static func openInEditor(_ l: Language = current) -> String { switch l { case .en: "Open in editor"; case .ko: "원본 편집기로 열기" } }
+    public static func openMarkdownFile(_ l: Language = current) -> String { switch l { case .en: "Open Markdown file…"; case .ko: "마크다운 파일 열기…" } }
+    public static func overwrite(_ l: Language = current) -> String { switch l { case .en: "Overwrite"; case .ko: "덮어쓰기" } }
+    public static func pin(_ l: Language = current) -> String { switch l { case .en: "Pin"; case .ko: "핀 고정" } }
+    public static func quit(_ l: Language = current) -> String { switch l { case .en: "Quit"; case .ko: "종료" } }
+    public static func recentErrorsHeader(_ l: Language = current) -> String { switch l { case .en: "⚠︎ Recent errors"; case .ko: "⚠︎ 최근 오류" } }
+    public static func save(_ l: Language = current) -> String { switch l { case .en: "Save"; case .ko: "저장" } }
+    public static func saveToSourceFile(_ l: Language = current) -> String { switch l { case .en: "Save to source file"; case .ko: "원본 파일에 저장" } }
+    public static func saved(_ l: Language = current) -> String { switch l { case .en: "Saved"; case .ko: "저장됨" } }
+    public static func showAll(_ l: Language = current) -> String { switch l { case .en: "Show all"; case .ko: "모두 보이기" } }
+    public static func showInFinder(_ l: Language = current) -> String { switch l { case .en: "Show in Finder"; case .ko: "Finder에서 보기" } }
+    public static func sourceChangedExternally(_ l: Language = current) -> String { switch l { case .en: "Source file changed externally"; case .ko: "원본 파일이 외부에서 변경되었습니다" } }
+    public static func sourceNotFound(_ l: Language = current) -> String { switch l { case .en: "Source file not found. It may have been moved or deleted."; case .ko: "원본 파일을 찾을 수 없습니다. 이동/삭제됐을 수 있습니다." } }
+    public static func takeFile(_ l: Language = current) -> String { switch l { case .en: "Take file"; case .ko: "파일 가져오기" } }
+    public static func unnamedFile(_ l: Language = current) -> String { switch l { case .en: "file"; case .ko: "파일" } }
+    public static func unpin(_ l: Language = current) -> String { switch l { case .en: "Unpin"; case .ko: "핀 해제" } }
+    public static func urlInvalidEncoding(_ l: Language = current) -> String { switch l { case .en: "Couldn't decode the content (encoding error)."; case .ko: "내용을 해석할 수 없습니다 (인코딩 오류)." } }
+    public static func urlMissingContent(_ l: Language = current) -> String { switch l { case .en: "The content is empty."; case .ko: "내용이 비어 있습니다." } }
+    public static func urlUnknownHost(_ l: Language = current) -> String { switch l { case .en: "Unsupported request (v1 supports only sticky://new)."; case .ko: "지원하지 않는 요청입니다 (v1은 sticky://new만 지원)." } }
+  emptyTitle: (_mb: number) => ({ en: "Nothing to pop", ko: "띄울 내용이 없습니다" }),
+  tooLargeTitleDoc: (_mb: number) => ({ en: "Document too large", ko: "문서가 너무 큽니다" }),
+  tooLargeTitleSel: (_mb: number) => ({ en: "Selection too large", ko: "선택 영역이 너무 큽니다" }),

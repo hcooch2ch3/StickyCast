@@ -17,19 +17,19 @@ function independentDecode(b64url: string): string {
   return new TextDecoder().decode(bytes);
 }
 
-describe("크로스-컴포넌트 왕복 픽스처 (fixtures/roundtrip.json)", () => {
-  it("픽스처가 비어있지 않다 (경로/로드 회귀 가드)", () => {
+describe("cross-component round-trip fixtures (fixtures/roundtrip.json)", () => {
+  it("fixtures are non-empty (path/load regression guard)", () => {
     expect(fixtures.length).toBeGreaterThan(0);
   });
 
   for (const { input, encoded, note } of fixtures) {
-    it(`인코더가 픽스처 encoded를 재현: ${note ?? input}`, () => {
+    it(`encoder reproduces the fixture encoded: ${note ?? input}`, () => {
       // The real extension encoder must match the machine-generated encoded value byte for byte.
       expect(toBase64URL(input)).toBe(encoded);
       expect(buildStickyURL(input, 10 * 1024 * 1024)).toBe(URL_PREFIX + encoded);
     });
 
-    it(`독립 디코더 왕복(인코더 신뢰 제거): ${note ?? input}`, () => {
+    it(`independent decoder round-trip (no encoder trust): ${note ?? input}`, () => {
       // toBase64URL output → third decoder → original text. Proves the encoder is correct rather than trusting the literal.
       expect(independentDecode(toBase64URL(input))).toBe(input);
     });

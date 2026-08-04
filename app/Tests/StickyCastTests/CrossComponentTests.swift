@@ -23,16 +23,16 @@ final class CrossComponentTests: XCTestCase {
 
     func testFixturesRoundTripThroughParser() throws {
         let fixtures = try loadFixtures()
-        XCTAssertFalse(fixtures.isEmpty, "픽스처 로드 실패/빈 배열 — 경로 회귀 가드")
+        XCTAssertFalse(fixtures.isEmpty, "fixture load failed / empty array — path regression guard")
 
         for fx in fixtures {
             let url = try XCTUnwrap(
                 URL(string: "sticky://new?content=\(fx.encoded)"),
-                "URL 생성 실패: \(fx.encoded)")
+                "URL build failed: \(fx.encoded)")
             let result = StickyURLParser.parse(url)
             XCTAssertEqual(
                 result, .success(fx.input),
-                "파서가 원문을 복원하지 못함 (\(fx.note ?? fx.input)) — encoded=\(fx.encoded)")
+                "parser did not restore the original (\(fx.note ?? fx.input)) — encoded=\(fx.encoded)")
         }
     }
 }

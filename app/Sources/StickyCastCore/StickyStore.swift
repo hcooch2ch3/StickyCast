@@ -191,12 +191,12 @@ public final class StickyStore {
         do {
             container = try JSONDecoder().decode(Container.self, from: data)
         } catch {
-            NSLog("StickyStore: restore 실패 (컨테이너 디코드) — %@", "\(error)")  // no silent failure
+            NSLog("StickyStore: restore failed (container decode) — %@", "\(error)")  // no silent failure
             return none
         }
         // Migration boundary: don't load an unsupported version (overwriting with v1 would downgrade and lose data).
         guard container.schemaVersion == Self.schemaVersion else {
-            NSLog("StickyStore: 미지원 schemaVersion %d (지원 %d) — 복원 건너뜀", container.schemaVersion, Self.schemaVersion)
+            NSLog("StickyStore: unsupported schemaVersion %d (supported %d) — skipping restore", container.schemaVersion, Self.schemaVersion)
             return none
         }
         // Restore normalization: so an over-cap store (corruption, downgrade, leftover big notes from an old version)
@@ -233,7 +233,7 @@ public final class StickyStore {
             let data = try JSONEncoder().encode(container)
             defaults.set(data, forKey: Self.storageKey)
         } catch {
-            NSLog("StickyStore: save 실패 (인코드) — %@", "\(error)")  // no silent failure
+            NSLog("StickyStore: save failed (encode) — %@", "\(error)")  // no silent failure
         }
     }
 

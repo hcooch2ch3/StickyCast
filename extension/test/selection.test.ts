@@ -8,30 +8,30 @@ function makeGetText(whole = "WHOLE-DOC") {
   );
 }
 
-describe("deriveContent (index.ts 선택 파생 로직)", () => {
-  it("선택 없음 → 문서 전체(getText())", () => {
+describe("deriveContent (index.ts selection-derivation logic)", () => {
+  it("no selection → whole document (getText())", () => {
     const getText = makeGetText();
     expect(deriveContent([], getText)).toBe("WHOLE-DOC");
     expect(getText).toHaveBeenCalledWith(); // called without a range
   });
 
-  it("폭 0 선택(캐럿)만 있으면 → 문서 전체", () => {
+  it("only a zero-width selection (caret) → whole document", () => {
     const getText = makeGetText();
     expect(deriveContent([{ from: 5, to: 5 }], getText)).toBe("WHOLE-DOC");
     expect(getText).toHaveBeenCalledWith();
   });
 
-  it("단일 정방향 선택 → 그 range 추출", () => {
+  it("single forward selection → extract that range", () => {
     const getText = makeGetText();
     expect(deriveContent([{ from: 2, to: 7 }], getText)).toBe("T[2,7]");
   });
 
-  it("역방향 선택(to<from) → 정렬해서 추출", () => {
+  it("reverse selection (to<from) → sort then extract", () => {
     const getText = makeGetText();
     expect(deriveContent([{ from: 9, to: 3 }], getText)).toBe("T[3,9]");
   });
 
-  it("다중 선택 → \\n\\n 결합 (폭 0은 제외)", () => {
+  it("multiple selections → joined by \\n\\n (zero-width excluded)", () => {
     const getText = makeGetText();
     const out = deriveContent(
       [{ from: 1, to: 4 }, { from: 10, to: 10 }, { from: 20, to: 15 }],

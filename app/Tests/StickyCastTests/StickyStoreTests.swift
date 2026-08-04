@@ -36,7 +36,7 @@ final class StickyStoreTests: XCTestCase {
         for i in 0..<StickyStore.maxStickies { _ = store.add(content: "n\(i)") }
         if case .failure(let e) = store.add(content: "over") {
             XCTAssertEqual(e, .capReached)
-        } else { XCTFail("cap 미적용") }
+        } else { XCTFail("cap not enforced") }
     }
 
     func testPersistRoundTrip() {
@@ -102,11 +102,11 @@ final class StickyStoreTests: XCTestCase {
         // Content byte cap: exactly at the limit is allowed, one byte over is .contentTooLarge (re-review)
         let store = makeStore()
         let atCap = String(repeating: "a", count: StickyStore.maxContentBytes)
-        if case .failure = store.add(content: atCap) { XCTFail("정확히 한도는 허용돼야") }
+        if case .failure = store.add(content: atCap) { XCTFail("exactly at the limit must be allowed") }
         let overCap = String(repeating: "a", count: StickyStore.maxContentBytes + 1)
         if case .failure(let e) = store.add(content: overCap) {
             XCTAssertEqual(e, .contentTooLarge)
-        } else { XCTFail("한도 초과는 .contentTooLarge") }
+        } else { XCTFail("over the limit must be .contentTooLarge") }
     }
 
     func testAddContentCapCountsBytesNotChars() {
@@ -116,11 +116,11 @@ final class StickyStoreTests: XCTestCase {
         let charCount = StickyStore.maxContentBytes / 3      // charCount Hangul chars = 3*charCount bytes, within the limit
         let ok = String(repeating: "가", count: charCount)
         XCTAssertLessThanOrEqual(ok.utf8.count, StickyStore.maxContentBytes)
-        if case .failure = store.add(content: ok) { XCTFail("바이트 한도 내 한글은 허용") }
+        if case .failure = store.add(content: ok) { XCTFail("Korean within the byte limit is allowed") }
         let over = String(repeating: "가", count: charCount + 1) // 3 more bytes → over the limit
         if case .failure(let e) = store.add(content: over) {
             XCTAssertEqual(e, .contentTooLarge)
-        } else { XCTFail("바이트 초과 한글은 .contentTooLarge") }
+        } else { XCTFail("Korean over the byte limit is .contentTooLarge") }
     }
 
     func testRestoreDropsOversizeContent() {
@@ -297,7 +297,7 @@ final class StickyStoreTests: XCTestCase {
         let store = makeStore()
         let n = try! store.add(content: "old", sourcePath: "/tmp/a.md", sourceBookmark: nil).get()
         let r = store.applyFileSync(id: n.id, content: "new", hash: "abc")
-        if case .failure = r { XCTFail("정상 반영 실패") }
+        if case .failure = r { XCTFail("normal apply failed") }
         XCTAssertEqual(store.notes[0].content, "new")
         XCTAssertEqual(store.notes[0].syncedHash, "abc")
     }
@@ -308,7 +308,7 @@ final class StickyStoreTests: XCTestCase {
         let big = String(repeating: "a", count: StickyStore.maxContentBytes + 1)
         if case .failure(let e) = store.applyFileSync(id: n.id, content: big, hash: "x") {
             XCTAssertEqual(e, .contentTooLarge)
-        } else { XCTFail(".contentTooLarge 기대") }
+        } else { XCTFail("expected .contentTooLarge") }
         XCTAssertEqual(store.notes[0].content, "ok")       // not applied
         XCTAssertEqual(store.notes[0].syncedHash, "seed")  // hash unchanged
     }
@@ -325,7 +325,7 @@ final class StickyStoreTests: XCTestCase {
         let n = try! store.add(content: "seed", sourcePath: "/tmp/a.md", sourceBookmark: nil).get()
         let atCap = String(repeating: "a", count: StickyStore.maxContentBytes)
         if case .failure = store.applyFileSync(id: n.id, content: atCap, hash: "h") {
-            XCTFail("정확히 한도는 반영돼야")
+            XCTFail("exactly at the limit must apply")
         }
         XCTAssertEqual(store.notes[0].content.utf8.count, StickyStore.maxContentBytes)
         XCTAssertEqual(store.notes[0].syncedHash, "h")
@@ -347,7 +347,7 @@ final class StickyStoreTests: XCTestCase {
     func testUpdateContentChangesAndPersists() {
         let store = makeStore()
         let note = try! store.add(content: "원본").get()
-        if case .failure = store.updateContent(id: note.id, content: "수정됨") { XCTFail("정상 업데이트 실패") }
+        if case .failure = store.updateContent(id: note.id, content: "수정됨") { XCTFail("normal update failed") }
         XCTAssertEqual(store.notes[0].content, "수정됨")
         let store2 = makeStore()
         store2.restore()
@@ -360,7 +360,7 @@ final class StickyStoreTests: XCTestCase {
         let over = String(repeating: "a", count: StickyStore.maxContentBytes + 1)
         if case .failure(let e) = store.updateContent(id: note.id, content: over) {
             XCTAssertEqual(e, .contentTooLarge)
-        } else { XCTFail("한도 초과는 .contentTooLarge") }
+        } else { XCTFail("over the limit must be .contentTooLarge") }
         XCTAssertEqual(store.notes[0].content, "작음")   // original unchanged
     }
 
@@ -369,7 +369,7 @@ final class StickyStoreTests: XCTestCase {
         let store = makeStore()
         if case .failure(let e) = store.updateContent(id: UUID(), content: "x") {
             XCTAssertEqual(e, .noteNotFound)
-        } else { XCTFail("미존재 id는 .noteNotFound") }
+        } else { XCTFail("a nonexistent id is .noteNotFound") }
     }
 
     // MARK: file-link fields (convenience feature Phase 1: import + link save)
@@ -445,7 +445,7 @@ final class StickyStoreTests: XCTestCase {
         let over = String(repeating: "a", count: StickyStore.maxContentBytes + 1)
         if case .failure(let e) = store.add(content: over, sourcePath: "/tmp/big.md", sourceBookmark: nil) {
             XCTAssertEqual(e, .contentTooLarge)
-        } else { XCTFail("한도 초과는 .contentTooLarge") }
+        } else { XCTFail("over the limit must be .contentTooLarge") }
     }
 
     func testSetColorPersistsRoundTrip() {
