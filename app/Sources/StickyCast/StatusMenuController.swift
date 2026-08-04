@@ -107,6 +107,24 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(makeItem(L10n.closeAll(), #selector(closeAll)))
         menu.addItem(.separator())
         menu.addItem(makeItem(L10n.aboutStickyCast(), #selector(showAbout)))
+        // Language override submenu (System / English / 한국어). Checkmark on the active choice.
+        let langItem = NSMenuItem(title: L10n.languageMenu(), action: nil, keyEquivalent: "")
+        let langSub = NSMenu()
+        let options: [(String, LanguageOverride)] = [
+            (L10n.languageSystem(), .system),
+            (L10n.languageEnglish(), .en),
+            (L10n.languageKorean(), .ko),
+        ]
+        for (title, value) in options {
+            let item = NSMenuItem(title: title, action: #selector(setLanguage(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = value.rawValue
+            item.state = (L10n.override == value) ? .on : .off
+            langSub.addItem(item)
+        }
+        langItem.submenu = langSub
+        menu.addItem(langItem)
+        menu.addItem(.separator())
         menu.addItem(makeItem(L10n.quit(), #selector(quit), key: "q"))
     }
 
@@ -143,4 +161,11 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         NSApp.activate()  // activate only for the About panel, as an exception (macOS 14 non-deprecated)
     }
     @objc private func quit() { NSApp.terminate(nil) }
+
+    @objc private func setLanguage(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let value = LanguageOverride(rawValue: raw) else { return }
+        L10n.override = value
+        // The menu rebuilds on next open (menuNeedsUpdate), so labels reflect the new language then.
+    }
 }
