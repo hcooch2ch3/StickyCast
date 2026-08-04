@@ -56,6 +56,12 @@ public enum L10n {
     public static func exportSticker(_ l: Language = current) -> String { switch l { case .en: "Export sticker"; case .ko: "스티커 내보내기" } }
     public static func closeAll(_ l: Language = current) -> String { switch l { case .en: "Close all"; case .ko: "모두 닫기" } }
     public static func aboutStickyCast(_ l: Language = current) -> String { switch l { case .en: "About StickyCast"; case .ko: "StickyCast에 관하여" } }
+    public static func aboutCredits(_ l: Language = current) -> String {
+        switch l {
+        case .en: return "Markdown rendering: swift-markdown-ui (MIT)\nMarkEdit companion tool"
+        case .ko: return "마크다운 렌더링: swift-markdown-ui (MIT)\nMarkEdit 동반 도구"
+        }
+    }
     public static func quit(_ l: Language = current) -> String { switch l { case .en: "Quit"; case .ko: "종료" } }
 
     // MARK: Language submenu (Task 3)

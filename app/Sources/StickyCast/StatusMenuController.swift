@@ -155,8 +155,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     }
     @objc private func showAbout() {
         NSApp.orderFrontStandardAboutPanel(options: [
-            .credits: NSAttributedString(string:
-                "Markdown rendering: swift-markdown-ui (MIT)\nMarkEdit companion tool")
+            .credits: NSAttributedString(string: L10n.aboutCredits())
         ])
         NSApp.activate()  // activate only for the About panel, as an exception (macOS 14 non-deprecated)
     }
