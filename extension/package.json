@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "test": "vitest run",
+    "test": "vitest run && bash ../scripts/i18n-guard.sh",
+    "i18n:guard": "bash ../scripts/i18n-guard.sh",
     "deploy": "./deploy.sh"
   },
   "devDependencies": {

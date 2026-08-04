@@ -2,6 +2,8 @@
 # app/make-app.sh: swift build → assemble .app → register with Launch Services → run
 set -euo pipefail
 cd "$(dirname "$0")"
+# i18n acceptance gate: fail fast if Korean UI/data drifted from the allowlist (before the slow build).
+bash "$(git rev-parse --show-toplevel)/scripts/i18n-guard.sh"
 swift build -c release
 APP="build/StickyCast.app"
 rm -rf "$APP"
