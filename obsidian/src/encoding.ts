@@ -23,3 +23,15 @@ export function buildStickyURL(content: string, maxContentBytes: number): string
   if (bytes.length > maxContentBytes) return null;
   return URL_PREFIX + bytesToBase64URL(bytes);
 }
+
+export const OPEN_URL_PREFIX = "sticky://open?path=";
+
+/**
+ * Build a link URL that tells the app to OPEN (and stay synced to) an on-disk file, rather than
+ * copy a text snapshot. The absolute path is base64url-encoded (same alphabet as content) so spaces,
+ * unicode, and slashes survive transport and the app-side alphabet check. No size cap: paths are short,
+ * and the app enforces the content cap when it reads the file.
+ */
+export function buildOpenURL(absPath: string): string {
+  return OPEN_URL_PREFIX + toBase64URL(absPath);
+}
