@@ -66,8 +66,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         switch StickyURLParser.parse(url) {
-        case .success(let content):
+        case .success(.new(let content)):
             createSticky(content: content)   // the content byte cap is enforced by store.add() (single source)
+        case .success(.open(let path)):
+            // A URL can come from anywhere: validate the path (existing markdown/text file) before opening it.
+            // openFile(at:) then reads it, stores the bookmark, seeds syncedHash, and arms the watcher → born linked.
+            guard let fileURL = LinkablePath.validate(path) else {
+                reportError(L10n.cannotOpenLinkedFile())
+                return
+            }
+            reportOpenFailure(openFile(at: fileURL), fileURL.lastPathComponent)
         case .failure(let error):
             reportError(errorMessage(for: error))
         }

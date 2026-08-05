@@ -191,8 +191,10 @@ public enum L10n {
         case .ko: return "sticky:// 핸들러가 이 앱이 아닙니다 (현재: \(name)). 앱을 다시 설치해 주세요."
         }
     }
-    // URLError enum
-    public static func urlUnknownHost(_ l: Language = current) -> String { switch l { case .en: "Unsupported request (v1 supports only sticky://new)."; case .ko: "지원하지 않는 요청입니다 (v1은 sticky://new만 지원)." } }
-    public static func urlMissingContent(_ l: Language = current) -> String { switch l { case .en: "The content is empty."; case .ko: "내용이 비어 있습니다." } }
-    public static func urlInvalidEncoding(_ l: Language = current) -> String { switch l { case .en: "Couldn't decode the content (encoding error)."; case .ko: "내용을 해석할 수 없습니다 (인코딩 오류)." } }
+    // URLError enum (verb-generic: sticky:// now has both new?content= and open?path=)
+    public static func urlUnknownHost(_ l: Language = current) -> String { switch l { case .en: "Unsupported request."; case .ko: "지원하지 않는 요청입니다." } }
+    public static func urlMissingContent(_ l: Language = current) -> String { switch l { case .en: "The request is missing its value."; case .ko: "요청에 값이 없습니다." } }
+    public static func urlInvalidEncoding(_ l: Language = current) -> String { switch l { case .en: "Couldn't decode the request (encoding error)."; case .ko: "요청을 해석할 수 없습니다 (인코딩 오류)." } }
+    // open?path= receiver-side guard failure
+    public static func cannotOpenLinkedFile(_ l: Language = current) -> String { switch l { case .en: "Can't open that file — it may be missing, a folder, or not a text file."; case .ko: "그 파일을 열 수 없습니다 — 없거나, 폴더이거나, 텍스트 파일이 아닐 수 있습니다." } }
 }

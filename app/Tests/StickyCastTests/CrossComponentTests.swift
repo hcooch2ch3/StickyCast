@@ -31,7 +31,7 @@ final class CrossComponentTests: XCTestCase {
                 "URL build failed: \(fx.encoded)")
             let result = StickyURLParser.parse(url)
             XCTAssertEqual(
-                result, .success(fx.input),
+                result, .success(.new(content: fx.input)),
                 "parser did not restore the original (\(fx.note ?? fx.input)) — encoded=\(fx.encoded)")
         }
     }

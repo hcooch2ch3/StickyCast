@@ -2,19 +2,19 @@ import XCTest
 @testable import StickyCastCore
 
 final class StickyURLParserTests: XCTestCase {
-    // Shared golden vectors, all 3
+    // Shared golden vectors, all 3 (now wrapped in the action enum)
     func testGoldenVector_KoreanEmoji() {
         let url = URL(string: "sticky://new?content=7JWI64WV8J-OiQ")!
-        XCTAssertEqual(StickyURLParser.parse(url), .success("안녕🎉"))
+        XCTAssertEqual(StickyURLParser.parse(url), .success(.new(content: "안녕🎉")))
     }
     func testGoldenVector_ASCII() {
         let url = URL(string: "sticky://new?content=aGk")!
-        XCTAssertEqual(StickyURLParser.parse(url), .success("hi"))
+        XCTAssertEqual(StickyURLParser.parse(url), .success(.new(content: "hi")))
     }
     func testGoldenVector_Underscore() {
         // this vector contains '_' (the most fragile _→/ reverse-mapping path)
         let url = URL(string: "sticky://new?content=7J296riwPz8_")!
-        XCTAssertEqual(StickyURLParser.parse(url), .success("읽기???"))
+        XCTAssertEqual(StickyURLParser.parse(url), .success(.new(content: "읽기???")))
     }
 
     // host / path / fragment grammar
@@ -29,7 +29,7 @@ final class StickyURLParserTests: XCTestCase {
     }
     func testTrailingSlashAllowed() {
         // treated as an empty path, so allowed
-        XCTAssertEqual(StickyURLParser.parse(URL(string: "sticky://new/?content=aGk")!), .success("hi"))
+        XCTAssertEqual(StickyURLParser.parse(URL(string: "sticky://new/?content=aGk")!), .success(.new(content: "hi")))
     }
     func testFragmentRejected() {
         XCTAssertEqual(StickyURLParser.parse(URL(string: "sticky://new?content=aGk#x")!), .failure(.unknownHost))
@@ -73,6 +73,33 @@ final class StickyURLParserTests: XCTestCase {
 
     // forward compatibility
     func testUnknownParamsIgnored() {
-        XCTAssertEqual(StickyURLParser.parse(URL(string: "sticky://new?content=aGk&future=x")!), .success("hi"))
+        XCTAssertEqual(StickyURLParser.parse(URL(string: "sticky://new?content=aGk&future=x")!), .success(.new(content: "hi")))
+    }
+
+    // --- open verb: sticky://open?path=<base64url absolute path> ---
+    func testOpenVerb_DecodesAbsolutePath() {
+        // toBase64URL("/Users/me/Notes/n.md")
+        let url = URL(string: "sticky://open?path=L1VzZXJzL21lL05vdGVzL24ubWQ")!
+        XCTAssertEqual(StickyURLParser.parse(url), .success(.open(path: "/Users/me/Notes/n.md")))
+    }
+    func testOpenVerb_RelativePathRejected() {
+        // toBase64URL("notes/n.md") — decodes fine but has no leading slash → rejected
+        let url = URL(string: "sticky://open?path=bm90ZXMvbi5tZA")!
+        XCTAssertEqual(StickyURLParser.parse(url), .failure(.invalidEncoding))
+    }
+    func testOpenVerb_MissingPathParam() {
+        XCTAssertEqual(StickyURLParser.parse(URL(string: "sticky://open")!), .failure(.missingContent))
+    }
+    func testOpenVerb_NonBase64PathRejected() {
+        // raw value "/etc/passwd" contains '/', which fails the base64url alphabet check before decode
+        XCTAssertEqual(StickyURLParser.parse(URL(string: "sticky://open?path=/etc/passwd")!), .failure(.invalidEncoding))
+    }
+    func testOpenVerb_UppercaseHostRejected() {
+        XCTAssertEqual(StickyURLParser.parse(URL(string: "sticky://OPEN?path=L1VzZXJzL21lL05vdGVzL24ubWQ")!), .failure(.unknownHost))
+    }
+    func testOpenVerb_DuplicatePathRejected() {
+        XCTAssertEqual(
+            StickyURLParser.parse(URL(string: "sticky://open?path=L1VzZXJzL21lL05vdGVzL24ubWQ&path=L2E")!),
+            .failure(.missingContent))
     }
 }

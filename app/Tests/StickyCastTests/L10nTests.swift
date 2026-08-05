@@ -84,6 +84,7 @@ final class L10nTests: XCTestCase {
             L10n.clipboardEmpty, L10n.onlyMarkdown, L10n.fileTooLargeMB, L10n.sourceNotFound,
             L10n.sourceChangedExternally, L10n.overwrite,
             L10n.urlUnknownHost, L10n.urlMissingContent, L10n.urlInvalidEncoding,
+            L10n.cannotOpenLinkedFile,
         ]
         for fn in fns {
             XCTAssertNotEqual(fn(.en), fn(.ko), "en and ko must differ: got \"\(fn(.en))\"")
