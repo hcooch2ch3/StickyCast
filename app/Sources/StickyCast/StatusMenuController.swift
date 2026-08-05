@@ -57,6 +57,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         }
 
         // create entry points (convenience features, Phase 1): above the list so the main actions come first.
+        menu.addItem(makeItem(L10n.newBlankSticky(), #selector(newBlankSticky)))
         menu.addItem(makeItem(L10n.newFromClipboard(), #selector(newFromClipboard)))
         menu.addItem(makeItem(L10n.openMarkdownFile(), #selector(openFile)))
         menu.addItem(.separator())
@@ -138,6 +139,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         guard let id = sender.representedObject as? UUID else { return }
         appDelegate.controllers[id]?.bringToFrontHighlighted()  // "bring forward + emphasize"
     }
+    @objc private func newBlankSticky() { appDelegate.createBlankSticky() }
     @objc private func newFromClipboard() { appDelegate.createStickyFromClipboard() }
     @objc private func openFile() { appDelegate.openMarkdownFile() }
     @objc private func exportNote(_ sender: NSMenuItem) {

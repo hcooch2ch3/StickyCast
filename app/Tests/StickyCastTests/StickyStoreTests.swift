@@ -283,6 +283,23 @@ final class StickyStoreTests: XCTestCase {
 
     // MARK: Live Sync, store methods
 
+    func testLinkToFileSetsLinkMetaAndHash() {
+        let store = makeStore()
+        let n = try! store.add(content: "hello").get()   // standalone (no source)
+        XCTAssertNil(store.notes[0].sourcePath)
+        store.linkToFile(id: n.id, sourcePath: "/tmp/new.md", sourceBookmark: Data([9]), syncedHash: "cafe")
+        let m = store.notes[0]
+        XCTAssertEqual(m.sourcePath, "/tmp/new.md")
+        XCTAssertEqual(m.sourceBookmark, Data([9]))
+        XCTAssertEqual(m.syncedHash, "cafe")
+        XCTAssertEqual(m.content, "hello")   // content unchanged
+    }
+    func testLinkToFileNoOpForUnknownID() {
+        let store = makeStore()
+        _ = try! store.add(content: "x").get()
+        store.linkToFile(id: UUID(), sourcePath: "/tmp/z.md", sourceBookmark: nil, syncedHash: "z")
+        XCTAssertNil(store.notes[0].sourcePath)   // untouched
+    }
     func testDetachFromFileClearsAllLinkMeta() {
         let store = makeStore()
         let n = try! store.add(content: "c", sourcePath: "/tmp/a.md", sourceBookmark: Data([1])).get()

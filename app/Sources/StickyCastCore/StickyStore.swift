@@ -134,6 +134,18 @@ public final class StickyStore {
         save()
     }
 
+    /// Link a standalone sticker to a file (the inverse of detachFromFile). Sets link metadata and the sync baseline.
+    /// Seed `syncedHash` with the just-written content's hash so any initial file-watch event is ignored (self-write ==
+    /// baseline → decideSyncAction's !fileChanged guard returns .ignore), not a spurious conflict banner. Content is
+    /// unchanged. No-op if the id doesn't exist.
+    public func linkToFile(id: UUID, sourcePath: String, sourceBookmark: Data?, syncedHash: String?) {
+        guard let i = notes.firstIndex(where: { $0.id == id }) else { return }
+        notes[i].sourcePath = sourcePath
+        notes[i].sourceBookmark = sourceBookmark
+        notes[i].syncedHash = syncedHash
+        save()
+    }
+
     /// Remove all link metadata, turning it into a standalone sticker. Content is preserved. (unlink)
     public func detachFromFile(id: UUID) {
         guard let i = notes.firstIndex(where: { $0.id == id }) else { return }

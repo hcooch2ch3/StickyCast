@@ -45,6 +45,7 @@
         let note = try! store.add(content: "핀").get()
         let ok = String(repeating: "가", count: charCount)
         let over = String(repeating: "가", count: charCount + 1) // 3 more bytes → over the limit
+        switch l { case .en: "Couldn't save to file (\(name))."; case .ko: "파일에 저장하지 못했습니다 (\(name))." }
         switch l { case .en: "Export failed (\(name))."; case .ko: "내보내기에 실패했습니다 (\(name))." }
         switch l { case .en: "Files too large: \(list)"; case .ko: "파일이 너무 큽니다: \(list)" }
         switch l { case .en: "Unreadable files: \(list)"; case .ko: "읽을 수 없는 파일: \(list)" }
@@ -93,6 +94,7 @@
     public static func languageMenu(_ l: Language = current) -> String { switch l { case .en: "Language"; case .ko: "언어" } }
     public static func languageSystem(_ l: Language = current) -> String { switch l { case .en: "System"; case .ko: "시스템" } }
     public static func linkedFileNotFound(_ l: Language = current) -> String { switch l { case .en: "Linked file not found"; case .ko: "연결된 파일을 찾을 수 없습니다" } }
+    public static func newBlankSticky(_ l: Language = current) -> String { switch l { case .en: "New blank sticker"; case .ko: "빈 스티커 새로 만들기" } }
     public static func newFromClipboard(_ l: Language = current) -> String { switch l { case .en: "New sticker from clipboard"; case .ko: "클립보드에서 스티커" } }
     public static func noStickers(_ l: Language = current) -> String { switch l { case .en: "No stickers"; case .ko: "스티커 없음" } }
     public static func onlyMarkdown(_ l: Language = current) -> String { switch l { case .en: "Only Markdown (.md/.markdown) files can be opened."; case .ko: "마크다운(.md/.markdown) 파일만 열 수 있습니다." } }
@@ -104,6 +106,7 @@
     public static func quit(_ l: Language = current) -> String { switch l { case .en: "Quit"; case .ko: "종료" } }
     public static func recentErrorsHeader(_ l: Language = current) -> String { switch l { case .en: "⚠︎ Recent errors"; case .ko: "⚠︎ 최근 오류" } }
     public static func save(_ l: Language = current) -> String { switch l { case .en: "Save"; case .ko: "저장" } }
+    public static func saveToNewFile(_ l: Language = current) -> String { switch l { case .en: "Save to file…"; case .ko: "파일로 저장…" } }
     public static func saveToSourceFile(_ l: Language = current) -> String { switch l { case .en: "Save to source file"; case .ko: "원본 파일에 저장" } }
     public static func saved(_ l: Language = current) -> String { switch l { case .en: "Saved"; case .ko: "저장됨" } }
     public static func showAll(_ l: Language = current) -> String { switch l { case .en: "Show all"; case .ko: "모두 보이기" } }
