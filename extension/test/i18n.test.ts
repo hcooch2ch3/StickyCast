@@ -25,4 +25,13 @@ describe("t (resolver)", () => {
   it("interpolates MB into the too-large body", () => {
     expect(t("en", 1).tooLargeBody).toContain("1MB");
   });
+  it("includes the unsaved-document warning keys in both languages", () => {
+    const en = t("en", 1);
+    const ko = t("ko", 1);
+    for (const key of ["unsavedTitle", "unsavedBody", "unsavedSnapshotBtn", "cancelBtn"] as const) {
+      expect(en[key].length).toBeGreaterThan(0);
+      expect(ko[key].length).toBeGreaterThan(0);
+      expect(en[key]).not.toBe(ko[key]);
+    }
+  });
 });

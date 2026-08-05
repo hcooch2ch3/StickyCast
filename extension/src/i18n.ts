@@ -23,6 +23,13 @@ export const messages = {
     en: `A sticker holds about ${mb}MB max. Select the part you want and try again.`,
     ko: `스티커는 약 ${mb}MB까지만 담을 수 있습니다. 원하는 부분만 선택한 뒤 다시 시도하세요.`,
   }),
+  unsavedTitle: (_mb: number) => ({ en: "Not saved yet", ko: "아직 저장 안 됨" }),
+  unsavedBody: (_mb: number) => ({
+    en: "This document has no file on disk, so the sticker can't stay in sync with it. Pop a snapshot instead?",
+    ko: "이 문서는 아직 파일로 저장되지 않아 스티커가 파일과 동기화될 수 없습니다. 스냅샷(복사본)으로 띄울까요?",
+  }),
+  unsavedSnapshotBtn: (_mb: number) => ({ en: "Pop snapshot", ko: "스냅샷으로 띄우기" }),
+  cancelBtn: (_mb: number) => ({ en: "Cancel", ko: "취소" }),
 };
 
 export function t(lang: Lang, mb: number) {

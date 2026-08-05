@@ -1,5 +1,5 @@
 import type { MarkEdit as MarkEditAPI } from "markedit-api";
-import { buildStickyURL } from "./encoding";
+import { buildStickyURL, buildOpenURL } from "./encoding";
 import { deriveContent } from "./selection";
 import { MAX_CONTENT_BYTES } from "./limits";
 import { detectLang, t } from "./i18n";
@@ -17,7 +17,7 @@ if (!g.__stickyCastRegistered) {
 
   MarkEdit.addMainMenuItem([{
     title: "Pop as Sticky",
-    action: () => {
+    action: async () => {
       const m = t(detectLang(), MAX_MB);
       // Use the selection if there is one, otherwise the whole document. deriveContent does the work (pure function, covered by tests).
       const selections = MarkEdit.editorAPI.getSelections();
@@ -28,6 +28,29 @@ if (!g.__stickyCastRegistered) {
       if (content.trim().length === 0) {
         void MarkEdit.showAlert({ title: m.emptyTitle, message: m.emptyBody });
         return;
+      }
+
+      // Whole document → try to link it to its file. A selection is a fragment with no file, so it stays a snapshot.
+      if (!hasSelection) {
+        const info = await MarkEdit.getFileInfo();
+        if (info?.filePath) {
+          // Best-effort flush so the linked file on disk matches what's on screen, then link.
+          // We deliberately do NOT gate the link on saveDocument()'s boolean: markedit-api doesn't
+          // specify its return for a clean (no-op) save, and gating would silently snapshot the common
+          // "open a saved file and Pop" case. A dirty document whose save truly fails links slightly-stale
+          // disk content — rare, and the app's hash-based conflict detection catches later divergence.
+          try { await MarkEdit.saveDocument(); } catch { /* best-effort flush */ }
+          window.location.href = buildOpenURL(info.filePath);
+          return;
+        }
+        // Genuinely untitled (no file on disk) → warn, then snapshot or cancel.
+        const choice = await MarkEdit.showAlert({
+          title: m.unsavedTitle,
+          message: m.unsavedBody,
+          buttons: [m.unsavedSnapshotBtn, m.cancelBtn],
+        });
+        if (choice !== 0) return; // Cancel
+        // fall through to snapshot
       }
 
       // Over the content limit (raw bytes): reject and warn instead of truncating (no silent failure, no truncation).
