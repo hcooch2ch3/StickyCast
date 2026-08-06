@@ -61,8 +61,8 @@ Copy `manifest.json` (repo root) and `obsidian/main.js` into `<vault>/.obsidian/
 
 Four ways to make a sticky:
 
-- **From MarkEdit**: select some Markdown, then **Extensions ▸ Pop as Sticky**.
-- **From Obsidian**: select some Markdown, then run **Pop as Sticky** from the command palette, the ribbon icon, or the editor right-click menu. With nothing selected, it sends the whole note.
+- **From MarkEdit**: select some Markdown, then **Extensions ▸ Pop as Sticky**. With nothing selected, popping a saved document **links** the sticky to that file (Live Sync); a selection or an unsaved document makes a plain snapshot.
+- **From Obsidian**: run **Pop as Sticky** from the command palette, the ribbon icon, or the editor right-click menu. With nothing selected, it **links** the sticky to the note's file (Live Sync); a selection makes a plain snapshot.
 - **From the clipboard**: menu bar icon ▸ **Sticky from clipboard**.
 - **From a file**: menu bar icon ▸ **Open Markdown file…**, or drag a `.md` onto the menu bar icon. A sticky opened from a file stays linked to it (see below).
 
