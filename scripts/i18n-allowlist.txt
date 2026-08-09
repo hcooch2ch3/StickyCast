@@ -8,8 +8,8 @@
         XCTAssertEqual(ExportNaming.filename(for: "### 제목만"), "제목만.md")
         XCTAssertEqual(ExportNaming.filename(for: "장보기 목록\n- 우유"), "장보기 목록.md")
         XCTAssertEqual(L10n.closeSticker(.ko), "스티커 닫기")
-        XCTAssertEqual(StickyURLParser.parse(url), .success("안녕🎉"))
-        XCTAssertEqual(StickyURLParser.parse(url), .success("읽기???"))
+        XCTAssertEqual(StickyURLParser.parse(url), .success(.new(content: "안녕🎉")))
+        XCTAssertEqual(StickyURLParser.parse(url), .success(.new(content: "읽기???")))
         XCTAssertEqual(n.content, "레거시")
         XCTAssertEqual(name, String(repeating: "가", count: 40) + ".md")
         XCTAssertEqual(s2.notes[0].syncedHash, ContentHash.sha256Hex("파일내용"))
@@ -57,17 +57,20 @@
       "input": "안녕🎉",
       "input": "읽기???",
     const out = toBase64URL("긴 한글 텍스트와 emoji 🎉🎉🎉 조합 ///+++");
+    const p = "/Users/me/Notes/한 글.md";
     expect(buildStickyURL("가", 2)).toBeNull();        // "가" = 3 bytes > 2
     expect(buildStickyURL("가", 3)).not.toBeNull();    // 3 == 3 allowed
     expect(buildStickyURL("안녕🎉", 1000)).toBe(URL_PREFIX + "7JWI64WV8J-OiQ");
     expect(toBase64URL("안녕🎉")).toBe("7JWI64WV8J-OiQ");
     expect(toBase64URL("읽기???")).toBe("7J296riwPz8_");
     ko: "문서가 비어 있거나 공백뿐입니다. 내용을 입력하거나 일부를 선택한 뒤 다시 시도하세요.",
+    ko: "이 문서는 아직 파일로 저장되지 않아 스티커가 파일과 동기화될 수 없습니다. 스냅샷(복사본)으로 띄울까요?",
     ko: `스티커는 약 ${mb}MB까지만 담을 수 있습니다. 원하는 부분만 선택한 뒤 다시 시도하세요.`,
     public static func aboutStickyCast(_ l: Language = current) -> String { switch l { case .en: "About StickyCast"; case .ko: "StickyCast에 관하여" } }
     public static func bothChanged(_ l: Language = current) -> String { switch l { case .en: "Both file and sticker changed"; case .ko: "파일과 스티커가 모두 변경됨" } }
     public static func bringAllToFront(_ l: Language = current) -> String { switch l { case .en: "Bring all to front"; case .ko: "모두 앞으로" } }
     public static func cancel(_ l: Language = current) -> String { switch l { case .en: "Cancel"; case .ko: "취소" } }
+    public static func cannotOpenLinkedFile(_ l: Language = current) -> String { switch l { case .en: "Can't open that file — it may be missing, a folder, or not a text file."; case .ko: "그 파일을 열 수 없습니다 — 없거나, 폴더이거나, 텍스트 파일이 아닐 수 있습니다." } }
     public static func clipboardEmpty(_ l: Language = current) -> String { switch l { case .en: "No text on the clipboard to paste."; case .ko: "클립보드에 붙여넣을 텍스트가 없습니다." } }
     public static func close(_ l: Language = current) -> String { switch l { case .en: "Close"; case .ko: "닫기" } }
     public static func closeAll(_ l: Language = current) -> String { switch l { case .en: "Close all"; case .ko: "모두 닫기" } }
@@ -113,9 +116,12 @@
     public static func takeFile(_ l: Language = current) -> String { switch l { case .en: "Take file"; case .ko: "파일 가져오기" } }
     public static func unnamedFile(_ l: Language = current) -> String { switch l { case .en: "file"; case .ko: "파일" } }
     public static func unpin(_ l: Language = current) -> String { switch l { case .en: "Unpin"; case .ko: "핀 해제" } }
-    public static func urlInvalidEncoding(_ l: Language = current) -> String { switch l { case .en: "Couldn't decode the content (encoding error)."; case .ko: "내용을 해석할 수 없습니다 (인코딩 오류)." } }
-    public static func urlMissingContent(_ l: Language = current) -> String { switch l { case .en: "The content is empty."; case .ko: "내용이 비어 있습니다." } }
-    public static func urlUnknownHost(_ l: Language = current) -> String { switch l { case .en: "Unsupported request (v1 supports only sticky://new)."; case .ko: "지원하지 않는 요청입니다 (v1은 sticky://new만 지원)." } }
+    public static func urlInvalidEncoding(_ l: Language = current) -> String { switch l { case .en: "Couldn't decode the request (encoding error)."; case .ko: "요청을 해석할 수 없습니다 (인코딩 오류)." } }
+    public static func urlMissingContent(_ l: Language = current) -> String { switch l { case .en: "The request is missing its value."; case .ko: "요청에 값이 없습니다." } }
+    public static func urlUnknownHost(_ l: Language = current) -> String { switch l { case .en: "Unsupported request."; case .ko: "지원하지 않는 요청입니다." } }
+  cancelBtn: (_mb: number) => ({ en: "Cancel", ko: "취소" }),
   emptyTitle: (_mb: number) => ({ en: "Nothing to pop", ko: "띄울 내용이 없습니다" }),
   tooLargeTitleDoc: (_mb: number) => ({ en: "Document too large", ko: "문서가 너무 큽니다" }),
   tooLargeTitleSel: (_mb: number) => ({ en: "Selection too large", ko: "선택 영역이 너무 큽니다" }),
+  unsavedSnapshotBtn: (_mb: number) => ({ en: "Pop snapshot", ko: "스냅샷으로 띄우기" }),
+  unsavedTitle: (_mb: number) => ({ en: "Not saved yet", ko: "아직 저장 안 됨" }),
