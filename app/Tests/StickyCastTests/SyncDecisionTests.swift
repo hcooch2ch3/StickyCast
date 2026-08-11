@@ -12,6 +12,13 @@ final class SyncDecisionTests: XCTestCase {
         XCTAssertEqual(decideSyncAction(stickerHash: "x", fileHash: "base", syncedHash: "base", isEditing: false), .ignore)
         XCTAssertEqual(decideSyncAction(stickerHash: "edited", fileHash: "base", syncedHash: "base", isEditing: true), .ignore)
     }
+    func testSeededSelfWriteIgnored() {
+        // "Save to file…" seeds syncedHash to the just-written content, then arms the watch. The write's own
+        // watcher event has fileHash == syncedHash == stickerHash → ignored (not converged), regardless of edit state.
+        // Guards the invariant the link path relies on: seeding must keep the initial self-write from raising a banner.
+        XCTAssertEqual(decideSyncAction(stickerHash: "seed", fileHash: "seed", syncedHash: "seed", isEditing: false), .ignore)
+        XCTAssertEqual(decideSyncAction(stickerHash: "seed", fileHash: "seed", syncedHash: "seed", isEditing: true), .ignore)
+    }
     func testCleanFileChangedAutoApplies() {
         // sticker clean (sticker==synced) + file changed → auto-apply
         XCTAssertEqual(decideSyncAction(stickerHash: "base", fileHash: "new", syncedHash: "base", isEditing: false), .autoApply)

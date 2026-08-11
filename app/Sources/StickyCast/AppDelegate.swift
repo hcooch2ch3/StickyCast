@@ -81,10 +81,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func createSticky(content: String) {
+    private func createSticky(content: String, startEditing: Bool = false) {
         switch store.add(content: content) {
         case .success(let note):
-            addController(for: note)   // a new sticker comes up via show() → anyStickerVisible becomes true automatically
+            addController(for: note, startEditing: startEditing)   // a new sticker comes up via show() → anyStickerVisible becomes true automatically
         case .failure(.capReached):
             reportError(L10n.maxStickiesReached(StickyStore.maxStickies))
         case .failure(.contentTooLarge):
@@ -107,9 +107,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         reportError(L10n.restoreFailed(parts.joined(separator: ", ")))
     }
 
-    private func addController(for note: StickyNote) {
+    private func addController(for note: StickyNote, startEditing: Bool = false) {
         let controller = StickyPanelController(
-            note: note, store: store,
+            note: note, store: store, startEditing: startEditing,
             onClosed: { [weak self] id in
                 self?.fileWatcher.unwatch(noteID: id)   // clean up the watch on close (leak prevention)
                 self?.controllers[id] = nil
@@ -119,10 +119,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onTakeFile: { [weak self] id in self?.takeFileForNote(id: id) },
             onDetach: { [weak self] id in self?.detachNote(id: id) },
             onReveal: { [weak self] id in self?.revealNoteInFinder(id: id) },
-            onOpenEditor: { [weak self] id in self?.openNoteInEditor(id: id) }
+            onOpenEditor: { [weak self] id in self?.openNoteInEditor(id: id) },
+            onSaveToNewFile: { [weak self] id in self?.saveNoteToNewFile(id: id) }
         )
         controllers[note.id] = controller
         controller.show()
+        // Blank-create path: make the panel key so the auto-entered TextEditor receives keystrokes.
+        // (.nonactivatingPanel keeps the frontmost app's focus. Never call NSApp.activate() here — it would steal focus.)
+        if startEditing { controller.focusForEditing() }
         // If it's a linked sticker, arm the Live Sync watch
         if note.sourcePath != nil, let url = resolveSourceURL(note: note) {
             fileWatcher.watch(noteID: note.id, url: url) { [weak self] in
@@ -198,7 +202,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Detach: stop watching, remove link metadata (content preserved), reflect in vm (hide 🔗/⬆️).
+    /// No-op on an already-standalone note so an unconditionally-wired onDetach can't churn (spurious save/vm writes).
     func detachNote(id: UUID) {
+        guard store.notes.first(where: { $0.id == id })?.sourcePath != nil else { return }
         fileWatcher.unwatch(noteID: id)
         store.detachFromFile(id: id)
         controllers[id]?.vm.isLinked = false
@@ -258,6 +264,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func showAllStickers() { controllers.values.forEach { $0.show() } }
 
     // MARK: Convenience features Phase 1: clipboard, open file, export
+
+    /// Create an empty sticker and drop straight into edit mode so the user can type. Menu bar "New blank sticker".
+    func createBlankSticky() { createSticky(content: "", startEditing: true) }
 
     /// Create a standalone sticker from clipboard text. Menu bar "New sticker from clipboard".
     func createStickyFromClipboard() {
@@ -431,6 +440,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             reportError(L10n.exportFailed(url.lastPathComponent))
         }
+    }
+
+    /// Save a standalone sticker to a new .md and link the sticker to it (the inverse of detachNote):
+    /// write file → store.linkToFile (seeds syncedHash) → flip vm.isLinked → arm the Live Sync watch.
+    /// After this the sticker gains the ⬆️/🔗 chrome and two-way sync, same as one opened from a file.
+    /// Sticker button "Save to file…" (unlinked stickers only).
+    func saveNoteToNewFile(id: UUID) {
+        guard let note = store.notes.first(where: { $0.id == id }) else { return }
+        let panel = NSSavePanel()
+        if let md = UTType(filenameExtension: "md") { panel.allowedContentTypes = [md] }
+        panel.nameFieldStringValue = ExportNaming.filename(for: note.content)
+        NSApp.activate()   // accessory app: bring the save panel to the front (same as export/open)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        // Resolve symlinks before writing so atomically:true's rename can't replace a vault symlink with a regular file (mirrors saveNoteToSourceFile).
+        let target = url.resolvingSymlinksInPath()
+        do {
+            try note.content.write(to: target, atomically: true, encoding: .utf8)
+        } catch {
+            reportError(L10n.saveToNewFileFailed(target.lastPathComponent))
+            return
+        }
+        // Link only after a successful write. Seed syncedHash with the just-written content BEFORE arming the watch,
+        // so the write's own file-watch event is ignored (self-write == baseline → decideSyncAction returns .ignore)
+        // rather than raising a spurious conflict banner.
+        let bookmark = try? target.bookmarkData()
+        store.linkToFile(id: id, sourcePath: target.path, sourceBookmark: bookmark,
+                         syncedHash: ContentHash.sha256Hex(note.content))
+        controllers[id]?.vm.isLinked = true   // reactively reveals ⬆️/🔗 and hides "Save to file…"
+        fileWatcher.watch(noteID: id, url: target) { [weak self] in self?.handleFileEvent(noteID: id) }
     }
 
     /// No silent failures: try a notification and always append to the menu bar's recent errors (permission-independent fallback)

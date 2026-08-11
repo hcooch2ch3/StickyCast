@@ -48,6 +48,7 @@ public enum L10n {
     public static func recentErrorsHeader(_ l: Language = current) -> String { switch l { case .en: "⚠︎ Recent errors"; case .ko: "⚠︎ 최근 오류" } }
     public static func newFromClipboard(_ l: Language = current) -> String { switch l { case .en: "New sticker from clipboard"; case .ko: "클립보드에서 스티커" } }
     public static func openMarkdownFile(_ l: Language = current) -> String { switch l { case .en: "Open Markdown file…"; case .ko: "마크다운 파일 열기…" } }
+    public static func newBlankSticky(_ l: Language = current) -> String { switch l { case .en: "New blank sticker"; case .ko: "빈 스티커 새로 만들기" } }
     public static func noStickers(_ l: Language = current) -> String { switch l { case .en: "No stickers"; case .ko: "스티커 없음" } }
     public static func emptyPreview(_ l: Language = current) -> String { switch l { case .en: "(empty)"; case .ko: "(빈 내용)" } }
     public static func hideAll(_ l: Language = current) -> String { switch l { case .en: "Hide all"; case .ko: "모두 숨기기" } }
@@ -83,6 +84,7 @@ public enum L10n {
     public static func detach(_ l: Language = current) -> String { switch l { case .en: "Detach"; case .ko: "연결 해제" } }
     public static func saved(_ l: Language = current) -> String { switch l { case .en: "Saved"; case .ko: "저장됨" } }
     public static func saveToSourceFile(_ l: Language = current) -> String { switch l { case .en: "Save to source file"; case .ko: "원본 파일에 저장" } }
+    public static func saveToNewFile(_ l: Language = current) -> String { switch l { case .en: "Save to file…"; case .ko: "파일로 저장…" } }
     public static func bothChanged(_ l: Language = current) -> String { switch l { case .en: "Both file and sticker changed"; case .ko: "파일과 스티커가 모두 변경됨" } }
     public static func takeFile(_ l: Language = current) -> String { switch l { case .en: "Take file"; case .ko: "파일 가져오기" } }
     public static func keepMyEdits(_ l: Language = current) -> String { switch l { case .en: "Keep my edits"; case .ko: "내 편집 유지" } }
@@ -178,6 +180,9 @@ public enum L10n {
     }
     public static func exportFailed(_ name: String, _ l: Language = current) -> String {
         switch l { case .en: "Export failed (\(name))."; case .ko: "내보내기에 실패했습니다 (\(name))." }
+    }
+    public static func saveToNewFileFailed(_ name: String, _ l: Language = current) -> String {
+        switch l { case .en: "Couldn't save to file (\(name))."; case .ko: "파일에 저장하지 못했습니다 (\(name))." }
     }
     public static func handlerNotRegistered(_ l: Language = current) -> String {
         switch l {

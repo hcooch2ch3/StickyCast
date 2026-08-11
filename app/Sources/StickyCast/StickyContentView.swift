@@ -6,12 +6,14 @@ struct StickyContentView: View {
     @ObservedObject var vm: StickyViewModel     // reactive content, banner, edit state
     let initialOpacity: Double
     let initialPinned: Bool
+    let startEditing: Bool                       // blank-create: auto-enter edit mode on first appear
     let onClose: () -> Void
     let onTogglePin: (Bool) -> Void
     let onOpacityChange: (Double) -> Void
     let onOpacityCommit: (Double) -> Void
     let onContentChange: ((String) -> Bool)?   // inline-edit save callback. Returns success (on failure, keeps editing). nil disables editing.
     let onSaveToFile: (() -> Bool)?             // push current content back to the source file (linked stickers only). Returns success.
+    let onSaveToNewFile: (() -> Void)?          // standalone sticker: save to a new .md file and link to it (unlinked stickers only)
     let onDetach: (() -> Void)?                 // unlink (🔗 popover)
     let onRevealInFinder: (() -> Void)?         // reveal in Finder
     let onOpenInEditor: (() -> Void)?           // open in the source editor
@@ -35,8 +37,10 @@ struct StickyContentView: View {
     @State private var showColorPicker = false
     @State private var pulseVisible = false      // brief top highlight on clean auto-sync
     @State private var showLinkPopover = false    // 🔗 link info / unlink popover
+    @State private var didAutoEdit = false        // blank-create: fire startEditing auto-entry once (onAppear can repeat)
 
     init(vm: StickyViewModel, initialOpacity: Double, initialPinned: Bool,
+         startEditing: Bool = false,
          onClose: @escaping () -> Void,
          onTogglePin: @escaping (Bool) -> Void,
          onOpacityChange: @escaping (Double) -> Void,
@@ -48,16 +52,19 @@ struct StickyContentView: View {
          onTakeFile: (() -> Void)? = nil,
          onDetach: (() -> Void)? = nil,
          onRevealInFinder: (() -> Void)? = nil,
-         onOpenInEditor: (() -> Void)? = nil) {
+         onOpenInEditor: (() -> Void)? = nil,
+         onSaveToNewFile: (() -> Void)? = nil) {
         _vm = ObservedObject(wrappedValue: vm)
         self.initialOpacity = initialOpacity
         self.initialPinned = initialPinned
+        self.startEditing = startEditing
         self.onClose = onClose
         self.onTogglePin = onTogglePin
         self.onOpacityChange = onOpacityChange
         self.onOpacityCommit = onOpacityCommit
         self.onContentChange = onContentChange
         self.onSaveToFile = onSaveToFile
+        self.onSaveToNewFile = onSaveToNewFile
         self.onDetach = onDetach
         self.onRevealInFinder = onRevealInFinder
         self.onOpenInEditor = onOpenInEditor
@@ -73,25 +80,42 @@ struct StickyContentView: View {
         draft = vm.content
         isEditing = true
         vm.setEditing(true)   // makes Live Sync treat this as dirty (prevents clobbering uncommitted edits)
-        // focus after TextEditor mounts: setting it on the same tick can be a no-op because
-        // the field isn't in the view tree yet (prevents focus failure on first entry).
-        DispatchQueue.main.async { editorFocused = true }
+        // Focus is driven by the TextEditor's own .onAppear (focusEditor): the field is guaranteed to be in the
+        // view tree there. The old same-tick/next-tick async guess couldn't guarantee that on a blank-create cold
+        // start (order-front + programmatic make-key + first layout + mount all in one runloop), dropping the focus.
     }
-    private func commitEdit() {
+
+    /// Focus the editor with a bounded retry. Called from the TextEditor's .onAppear. On a cold-start create the
+    /// panel may not be key/first-responder on the first attempt, so re-assert a few times until @FocusState takes.
+    private func focusEditor(attempt: Int = 0) {
+        editorFocused = true
+        guard attempt < 5 else { return }   // ~5 × 50ms ceiling; stop once focus took or we've tried enough
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            if isEditing, !editorFocused { focusEditor(attempt: attempt + 1) }
+        }
+    }
+    @discardableResult
+    private func commitEdit() -> Bool {
         // on save failure (e.g. over 1MB), stay in edit mode and don't update vm.content (controller shows the error).
         // no silent failures: don't let an edit vanish without a trace.
         let ok = onContentChange?(draft) ?? true
-        guard ok else { return }
+        guard ok else { return false }
         vm.content = draft
         isEditing = false
         vm.setEditing(false)
         // Auto write-back: a linked sticker whose content now differs from the file pushes to the source file,
         // reusing the ⬆️ path (incl. the confirmOverwrite dialog on external change). Skipped when in sync, so a
         // no-op edit doesn't touch the file. onContentChange already persisted `draft` to the store, which is
-        // what onSaveToFile reads.
+        // what onSaveToFile reads. (Unlinked stickers skip this; the Save-to-file flow below links them instead.)
         if vm.isLinked, vm.diverged, let onSaveToFile {
             flashSaveResult(onSaveToFile())
         }
+        return true
+    }
+    /// Edit-toolbar "Save to file…": commit the in-progress draft first so the file gets the typed content, then save+link.
+    private func commitThenSaveToNewFile() {
+        guard commitEdit() else { return }   // abort save if the commit failed (e.g. over 1MB)
+        onSaveToNewFile?()
     }
     private func cancelEdit() {
         isEditing = false   // discard draft
@@ -104,6 +128,17 @@ struct StickyContentView: View {
         case .success: return "checkmark.circle.fill"
         case .failure: return "xmark.circle.fill"
         case nil:      return "arrow.up.doc"
+        }
+    }
+    // extracted from the top chrome HStack to keep that expression within the SwiftUI type-checker's budget.
+    @ViewBuilder private var saveToNewFileChromeButton: some View {
+        if !vm.isLinked, let onSaveToNewFile, !isEditing {
+            Button(action: onSaveToNewFile) {
+                Image(systemName: "arrow.down.doc").imageScale(.medium).foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.saveToNewFile())
+            .help(L10n.saveToNewFile())
         }
     }
     private var saveIconColor: Color {
@@ -203,6 +238,8 @@ struct StickyContentView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(L10n.edit())
                 }
+                // save to a new file + link: standalone (unlinked) stickers only. Once linked, the ⬆️ button below takes over.
+                saveToNewFileChromeButton
                 // 🔗 link indicator / popover: file-linked stickers only
                 if vm.isLinked, !isEditing {
                     Button(action: { showLinkPopover.toggle() }) {
@@ -270,11 +307,16 @@ struct StickyContentView: View {
                         .padding(6)
                         .focused($editorFocused)
                         .onExitCommand(perform: cancelEdit)   // Esc → cancel
+                        .onAppear { focusEditor() }           // grab focus once the field is actually in the tree (reliable on cold-start create)
                     HStack(spacing: 8) {
+                        // standalone sticker: save the typed content to a new .md and link to it (visible right while typing a fresh sticky)
+                        if !vm.isLinked, onSaveToNewFile != nil {
+                            Button(L10n.saveToNewFile(), action: commitThenSaveToNewFile)
+                        }
                         Spacer()
                         Button(L10n.cancel(), action: cancelEdit)
                             .keyboardShortcut(.cancelAction)
-                        Button(L10n.save(), action: commitEdit)
+                        Button(L10n.save()) { commitEdit() }
                             .keyboardShortcut(.return, modifiers: .command)   // ⌘Enter → save
                     }
                     .controlSize(.small)
@@ -304,6 +346,11 @@ struct StickyContentView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                 withAnimation { pulseVisible = false }
             }
+        }
+        .onAppear {   // blank-create: enter edit mode once. onAppear can fire again (Space switch, re-mount) → guard.
+            guard startEditing, !didAutoEdit else { return }
+            didAutoEdit = true
+            beginEdit()   // isEditing → TextEditor mounts → its .onAppear (focusEditor) grabs focus
         }
         .animation(.easeInOut(duration: 0.15), value: hovering)
         .onHover { hovering = $0 }

@@ -15,13 +15,15 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
     private var isFlashing = false         // re-entrancy guard for the highlight
 
     init(note: StickyNote, store: StickyStore,
+         startEditing: Bool = false,
          onClosed: @escaping (UUID) -> Void,
          onSaveToFile: @escaping (UUID) -> Bool = { _ in false },
          onError: @escaping (String) -> Void = { _ in },
          onTakeFile: @escaping (UUID) -> Void = { _ in },
          onDetach: @escaping (UUID) -> Void = { _ in },
          onReveal: @escaping (UUID) -> Void = { _ in },
-         onOpenEditor: @escaping (UUID) -> Void = { _ in }) {
+         onOpenEditor: @escaping (UUID) -> Void = { _ in },
+         onSaveToNewFile: @escaping (UUID) -> Void = { _ in }) {
         self.noteID = note.id
         self.store = store
         self.onClosed = onClosed
@@ -37,6 +39,7 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
             vm: vm,
             initialOpacity: note.opacity,
             initialPinned: note.pinned == true,
+            startEditing: startEditing,
             onClose: { [weak self] in self?.close() },
             onTogglePin: { [weak self] pinned in         // genuine pin wiring; initial apply happens at creation
                 guard let self else { return }
@@ -65,23 +68,27 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
                     return false
                 }
             },
-            // file-linked stickers only: push current content back to the source file. Returns success so the button shows check/X.
-            onSaveToFile: isLinked ? { [weak self] in
+            // File actions are wired unconditionally (not gated on the initial link state): the view renders each
+            // one on `vm.isLinked`, which flips live when a standalone sticker is saved+linked via "Save to file…".
+            // Each handler no-ops on a still-unlinked sticker (guarding on sourcePath / resolveSourceURL), so the
+            // wiring is inert until the note is actually linked.
+            onSaveToFile: { [weak self] in
                 guard let self else { return false }
-                return onSaveToFile(self.noteID)
-            } : nil,
+                return onSaveToFile(self.noteID)   // push current content back to the source file; returns success for the check/X flash
+            },
             initialColor: note.color,
             onColorChange: { [weak self] key in
                 guard let self else { return }
                 self.store.setColor(id: self.noteID, color: key)
             },
-            onTakeFile: isLinked ? { [weak self] in
+            onTakeFile: { [weak self] in
                 guard let self else { return }
                 onTakeFile(self.noteID)   // conflict banner "pull file content"
-            } : nil,
-            onDetach: isLinked ? { [weak self] in guard let self else { return }; onDetach(self.noteID) } : nil,
-            onRevealInFinder: isLinked ? { [weak self] in guard let self else { return }; onReveal(self.noteID) } : nil,
-            onOpenInEditor: isLinked ? { [weak self] in guard let self else { return }; onOpenEditor(self.noteID) } : nil
+            },
+            onDetach: { [weak self] in guard let self else { return }; onDetach(self.noteID) },
+            onRevealInFinder: { [weak self] in guard let self else { return }; onReveal(self.noteID) },
+            onOpenInEditor: { [weak self] in guard let self else { return }; onOpenEditor(self.noteID) },
+            onSaveToNewFile: { [weak self] in guard let self else { return }; onSaveToNewFile(self.noteID) }  // standalone → save to a new file and link
         ))
         // apply the saved pin state to the window level on restore/create (applyPinned is required on restore)
         panel.applyPinned(note.pinned == true)
@@ -99,6 +106,10 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
     }
 
     func show() { panel.orderFrontRegardless() }
+    /// Blank-create only: make the panel key so the auto-entered TextEditor receives keystrokes.
+    /// `.nonactivatingPanel` means keying does not activate the app (the frontmost app keeps focus).
+    /// The actual edit-mode entry is driven by the view's `startEditing` in onAppear. Never add NSApp.activate() here.
+    func focusForEditing() { panel.makeKeyAndOrderFront(nil) }
     func hide() { panel.orderOut(nil) }   // non-destructive hide: note and controller stay alive (unlike close)
     var isVisible: Bool { panel.isVisible }   // false after orderOut. Lets menu labels derive from actual visibility.
     func bringToFront() { panel.orderFrontRegardless() }
