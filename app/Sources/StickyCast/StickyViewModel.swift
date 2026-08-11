@@ -1,4 +1,5 @@
 import SwiftUI
+import StickyCastCore
 
 /// conflict banner state. (Live Sync)
 enum SyncBanner: Equatable { case conflict }
@@ -11,15 +12,21 @@ enum SyncBanner: Equatable { case conflict }
 final class StickyViewModel: ObservableObject {
     @Published var content: String
     @Published var isLinked: Bool                  // whether a file is linked: false on detach → reactively hides 🔗/⬆️
+    @Published var syncedHash: String?             // file baseline hash; nil = unlinked / not yet seeded
     @Published var syncBanner: SyncBanner? = nil   // banner on conflict
     @Published var autoSyncPulse: Bool = false     // trigger for the clean auto-sync indicator
     @Published var oversize: Bool = false          // linked file exceeds maxContentBytes
     /// whether an inline edit is in progress: Live Sync reads this as dirty input. Prevents clobbering uncommitted edits.
     private(set) var isEditing: Bool = false
 
-    init(content: String, isLinked: Bool = false) {
+    /// The sticker content differs from the file baseline → there is something to push. Computed from the two
+    /// @Published inputs so SwiftUI re-evaluates the ⬆️ enablement reactively; false when unlinked / unseeded.
+    var diverged: Bool { SyncDivergence.diverged(contentHash: ContentHash.sha256Hex(content), syncedHash: syncedHash) }
+
+    init(content: String, isLinked: Bool = false, syncedHash: String? = nil) {
         self.content = content
         self.isLinked = isLinked
+        self.syncedHash = syncedHash
     }
 
     func setEditing(_ v: Bool) { isEditing = v }

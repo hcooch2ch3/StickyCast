@@ -159,11 +159,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 break
             case .converged:
                 self.store.setSyncedHash(id: noteID, hash: result.hash)
+                controller.vm.syncedHash = result.hash   // baseline moved → keep `diverged` (⬆️ enablement) accurate
                 controller.vm.syncBanner = nil   // content converged with the file → clear any lingering conflict banner
             case .autoApply:
                 switch self.store.applyFileSync(id: noteID, content: result.content, hash: result.hash) {
                 case .success:
                     controller.vm.content = result.content
+                    controller.vm.syncedHash = result.hash   // content and baseline both = file → not diverged
                     controller.vm.oversize = false
                     controller.vm.autoSyncPulse.toggle()
                 case .failure(.contentTooLarge):
@@ -230,6 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             switch self.store.applyFileSync(id: id, content: result.content, hash: result.hash) {
             case .success:
                 controller.vm.content = result.content
+                controller.vm.syncedHash = result.hash   // took the file → content and baseline both = file → not diverged
                 controller.vm.oversize = false
             case .failure(.contentTooLarge):
                 controller.vm.oversize = true
@@ -374,7 +377,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             try note.content.write(to: url, atomically: true, encoding: .utf8)
             // Ordering guarantee: update syncedHash synchronously right after the write → the incoming watcher callback sees F=false and ignores it.
-            store.setSyncedHash(id: id, hash: ContentHash.sha256Hex(note.content))
+            let newHash = ContentHash.sha256Hex(note.content)
+            store.setSyncedHash(id: id, hash: newHash)
+            controllers[id]?.vm.syncedHash = newHash   // pushed to file → baseline = content → not diverged (⬆️ greys)
             // self-write suppression window (second line of defense): prevents a bogus banner even if the user types during the re-arm window.
             suppressedNotes.insert(id)
             // ⚠️ Invariant: this suppression window (0.3s) must be larger than the FileWatcher re-arm + onChange cycle (0.15s)

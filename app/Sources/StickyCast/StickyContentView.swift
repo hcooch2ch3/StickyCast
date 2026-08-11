@@ -85,6 +85,13 @@ struct StickyContentView: View {
         vm.content = draft
         isEditing = false
         vm.setEditing(false)
+        // Auto write-back: a linked sticker whose content now differs from the file pushes to the source file,
+        // reusing the ⬆️ path (incl. the confirmOverwrite dialog on external change). Skipped when in sync, so a
+        // no-op edit doesn't touch the file. onContentChange already persisted `draft` to the store, which is
+        // what onSaveToFile reads.
+        if vm.isLinked, vm.diverged, let onSaveToFile {
+            flashSaveResult(onSaveToFile())
+        }
     }
     private func cancelEdit() {
         isEditing = false   // discard draft
@@ -223,7 +230,7 @@ struct StickyContentView: View {
                             .contentTransition(.symbolEffect(.replace))
                     }
                     .buttonStyle(.plain)
-                    .disabled(saveFlash != nil)
+                    .disabled(saveFlash != nil || !vm.diverged)   // greyed when the sticker matches the file (nothing to push)
                     .accessibilityLabel(saveFlash == .success ? L10n.saved() : L10n.saveToSourceFile())
                     .help(L10n.saveToSourceFile())
                 }

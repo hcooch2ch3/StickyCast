@@ -28,7 +28,7 @@ final class StickyPanelController: NSObject, NSWindowDelegate {
         self.committedOpacity = note.opacity
         self.panel = StickyPanel(frame: note.frame)
         let isLinked = note.sourcePath != nil   // file-linked sticker → show 🔗/⬆️
-        self.vm = StickyViewModel(content: note.content, isLinked: isLinked)
+        self.vm = StickyViewModel(content: note.content, isLinked: isLinked, syncedHash: note.syncedHash)
         super.init()
 
         panel.alphaValue = note.opacity
