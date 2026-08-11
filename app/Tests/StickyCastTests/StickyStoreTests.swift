@@ -478,4 +478,22 @@ final class StickyStoreTests: XCTestCase {
         XCTAssertEqual(store2.notes.count, 1)
         XCTAssertEqual(store2.notes[0].pinned, true)
     }
+
+    // Regression (auto-write-back C1): a linked add must return a note that already carries the
+    // seeded syncedHash. StickyNote is a value type, so openFile hands the RETURNED note to the VM;
+    // if the baseline weren't seeded here, vm.syncedHash would be nil and `diverged`/⬆️/⌘Return
+    // write-back would be dead for the session.
+    func testLinkedAddSeedsSyncedHashOnReturnedNote() {
+        let store = makeStore()
+        guard case .success(let note) = store.add(content: "hello", sourcePath: "/tmp/x.md", sourceBookmark: nil) else {
+            return XCTFail("linked add failed")
+        }
+        XCTAssertEqual(note.syncedHash, ContentHash.sha256Hex("hello"))
+    }
+
+    func testUnlinkedAddLeavesSyncedHashNil() {
+        let store = makeStore()
+        guard case .success(let note) = store.add(content: "hi") else { return XCTFail("add failed") }
+        XCTAssertNil(note.syncedHash)
+    }
 }

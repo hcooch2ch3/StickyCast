@@ -202,6 +202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         fileWatcher.unwatch(noteID: id)
         store.detachFromFile(id: id)
         controllers[id]?.vm.isLinked = false
+        controllers[id]?.vm.syncedHash = nil   // hygiene: clear the baseline too (button is isLinked-gated, but keep vm consistent)
         controllers[id]?.vm.syncBanner = nil
         controllers[id]?.vm.oversize = false
     }

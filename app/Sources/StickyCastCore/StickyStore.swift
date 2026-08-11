@@ -89,7 +89,11 @@ public final class StickyStore {
             frame: nextFrame(index: notes.count),
             opacity: 1.0, createdAt: Date(),
             sourcePath: sourcePath, sourceBookmark: sourceBookmark,
-            sourceModifiedDate: sourceModifiedDate
+            sourceModifiedDate: sourceModifiedDate,
+            // Seed the Live Sync baseline for a linked note at creation, so the returned value type
+            // carries it: openFile hands this returned note straight to the VM (StickyNote is a struct,
+            // so a later store-side setSyncedHash would NOT reach that already-captured copy). Unlinked → nil.
+            syncedHash: sourcePath != nil ? ContentHash.sha256Hex(content) : nil
         )
         notes.append(note)
         save()
