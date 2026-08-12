@@ -29,9 +29,9 @@ final class StickyPanel: NSPanel {
     }
     override var canBecomeKey: Bool { true }
 
-    /// ⌘X / ⌘C / ⌘V / ⌘A inside a sticker: the panel resolves the shortcut itself and runs it
-    /// against its own first responder, so it works without depending on this panel being the key
-    /// window. Undo/redo are deliberately left to the menu — see EditCommand.windowDispatchable.
+    /// ⌘X / ⌘C / ⌘V / ⌘A / ⌘Z / ⇧⌘Z inside a sticker: the panel resolves the shortcut itself and
+    /// runs it against its own first responder, so it works without depending on this panel being
+    /// the key window. Undo takes a separate route — see EditCommand.windowDispatchable.
     /// super runs first so any view-level shortcut keeps priority over this interceptor. Nothing
     /// collides today — ⌘Return (save) and Esc (cancel) never match — but the order is the invariant.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {

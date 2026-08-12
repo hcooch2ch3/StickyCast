@@ -13,6 +13,9 @@ public enum EditCommand: String, CaseIterable, Sendable {
     /// undo, and block the menu from routing them. `NSWindow` responds to none of the four below,
     /// so an unhandled ⌘C falls through untouched. Verified against AppKit: NSWindow responds
     /// undo:/redo: true, cut:/copy:/paste:/selectAll: false; NSTextView is the mirror image.
+    ///
+    /// Undo and redo are therefore delivered a different way — straight to the focused editor's
+    /// undo manager, gated on `canUndo`/`canRedo`. See `EditMenu.performUndoOrRedo`.
     public static let windowDispatchable: [EditCommand] = [.cut, .copy, .paste, .selectAll]
 
     /// The Objective-C selector this command sends. Lives here, away from AppKit, so a missing or

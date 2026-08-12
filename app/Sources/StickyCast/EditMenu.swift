@@ -94,7 +94,8 @@ enum EditMenu {
     // MARK: Dispatch
 
     /// Resolve a key event to an edit command and run it against `window`'s own responder chain.
-    /// Returns false for anything unrecognized so the event falls through untouched.
+    /// Returns false for anything unrecognized, or for anything nothing can act on, so the event
+    /// falls through untouched.
     static func dispatch(_ event: NSEvent, in window: NSWindow) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         guard let command = EditShortcut.command(key: event.charactersIgnoringModifiers ?? "",
@@ -103,11 +104,35 @@ enum EditMenu {
                                                  shift: flags.contains(.shift),
                                                  option: flags.contains(.option),
                                                  control: flags.contains(.control)),
-              EditCommand.windowDispatchable.contains(command),   // see the note on that list
               let responder = window.firstResponder
         else { return false }
-        // tryToPerform walks the chain from this window's own first responder — unlike sendAction(to: nil),
-        // which starts at the KEY window and would find nothing while another app holds focus.
-        return responder.tryToPerform(action(for: command), with: nil)
+
+        if EditCommand.windowDispatchable.contains(command) {
+            // tryToPerform walks the chain from this window's own first responder — unlike sendAction(to: nil),
+            // which starts at the KEY window and would find nothing while another app holds focus.
+            return responder.tryToPerform(action(for: command), with: nil)
+        }
+        return performUndoOrRedo(command, on: responder)
+    }
+
+    /// Undo and redo can't go through `tryToPerform`: the chain ends at the window, which responds
+    /// to `undo:`/`redo:` by forwarding to its own undo manager, so every ⌘Z would be claimed no
+    /// matter what had focus. Instead reach the editor's own manager directly, and claim the event
+    /// only when there is genuinely something to undo — otherwise ⌘Z falls through as it should.
+    private static func performUndoOrRedo(_ command: EditCommand, on responder: NSResponder) -> Bool {
+        // allowsUndo gates the manager lookup: without it NSTextView falls back up the chain and
+        // hands back the window's undo manager, which belongs to something else entirely.
+        guard command == .undo || command == .redo,
+              let textView = responder as? NSTextView, textView.allowsUndo,
+              let manager = textView.undoManager
+        else { return false }
+        if command == .undo {
+            guard manager.canUndo else { return false }
+            manager.undo()
+        } else {
+            guard manager.canRedo else { return false }
+            manager.redo()
+        }
+        return true
     }
 }
