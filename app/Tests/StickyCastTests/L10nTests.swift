@@ -79,6 +79,7 @@ final class L10nTests: XCTestCase {
             L10n.fileLink, L10n.showInFinder, L10n.openInEditor, L10n.detach, L10n.saved,
             L10n.saveToSourceFile, L10n.bothChanged, L10n.takeFile, L10n.keepMyEdits,
             L10n.linkedFileTooLarge, L10n.cancel, L10n.save,
+            L10n.undo, L10n.redo, L10n.cut, L10n.copy, L10n.paste, L10n.selectAll,
             L10n.contentTooLargeMB, L10n.couldNotSaveEdits, L10n.contentTooLarge,
             L10n.unnamedFile, L10n.linkedFileNotFound, L10n.keepDetach, L10n.close,
             L10n.clipboardEmpty, L10n.onlyMarkdown, L10n.fileTooLargeMB, L10n.sourceNotFound,
