@@ -48,17 +48,27 @@ public enum EditCommand: String, CaseIterable, Sendable {
 /// Exact-modifier matching matters: ⌘C means copy, but ⌥⌘C or ⌃⌘C are different shortcuts a text
 /// view (or another app) may define, and swallowing them here would break them silently.
 public enum EditShortcut {
-    /// `key` is the event's characters-ignoring-modifiers; `keyCode` its virtual key code. The
-    /// letter is tried first (it follows a remapped layout such as Dvorak, where the key code
-    /// would point at the wrong command) and the key code serves as the fallback for layouts that
-    /// produce no Latin letter at all.
+    /// `key` is the event's characters-ignoring-modifiers; `keyCode` its virtual key code.
+    ///
+    /// The character decides whenever the layout produced a Latin letter at all — including a letter
+    /// that maps to no command. Falling back to position in that case would misread every layout
+    /// that merely rearranges the Latin alphabet: on AZERTY the key at the US-A position reports
+    /// "q", so ⌘Q would resolve to select-all; QWERTZ and Dvorak break the same way. The key code is
+    /// consulted only when the character is not a Latin letter — a Cyrillic or Greek layout, where
+    /// no character match is possible and position is the only signal left.
     public static func command(key: String, keyCode: UInt16? = nil, command: Bool,
                                shift: Bool = false, option: Bool = false,
                                control: Bool = false) -> EditCommand? {
         guard command, !option, !control else { return nil }
-        if let byLetter = byLetter(key.lowercased(), shift: shift) { return byLetter }
+        let lowered = key.lowercased()
+        if isLatinLetter(lowered) { return byLetter(lowered, shift: shift) }
         guard let keyCode else { return nil }
         return EditCommand.allCases.first { $0.keyCode == keyCode && matchesShift($0, shift: shift) }
+    }
+
+    private static func isLatinLetter(_ key: String) -> Bool {
+        guard key.count == 1, let scalar = key.unicodeScalars.first else { return false }
+        return scalar >= "a" && scalar <= "z"
     }
 
     private static func byLetter(_ key: String, shift: Bool) -> EditCommand? {

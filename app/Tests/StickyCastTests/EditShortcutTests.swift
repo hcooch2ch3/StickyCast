@@ -55,6 +55,16 @@ final class EditShortcutTests: XCTestCase {
         XCTAssertEqual(EditShortcut.command(key: "c", keyCode: 9, command: true), .copy)
     }
 
+    /// A Latin letter that maps to no command must NOT fall back to position. On AZERTY the key at
+    /// the US-A position reports "q", so a positional fallback would turn ⌘Q into select-all;
+    /// QWERTZ ⌘Y would become undo and Dvorak ⌘J would become copy.
+    func testRearrangedLatinLayoutsDoNotFallBackToKeyCode() {
+        XCTAssertNil(EditShortcut.command(key: "q", keyCode: 0, command: true))   // AZERTY ⌘Q
+        XCTAssertNil(EditShortcut.command(key: "y", keyCode: 6, command: true))   // QWERTZ ⌘Y
+        XCTAssertNil(EditShortcut.command(key: "j", keyCode: 8, command: true))   // Dvorak ⌘J
+        XCTAssertNil(EditShortcut.command(key: "w", keyCode: 6, command: true))   // AZERTY ⌘W
+    }
+
     func testEverySelectorNameIsWellFormed() {
         for command in EditCommand.allCases {
             XCTAssertTrue(command.selectorName.hasSuffix(":"), "\(command) selector needs an argument")

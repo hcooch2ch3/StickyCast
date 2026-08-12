@@ -41,8 +41,10 @@ enum EditMenu {
     ]
 
     /// Selectors come from Core's table, which is unit-tested for completeness. The four clipboard
-    /// ones also exist as compile-checked `#selector`s, so this cross-check catches a typo in a
-    /// string that would otherwise dead-end silently at runtime.
+    /// ones also exist as compile-checked `#selector`s; cross-checking them catches a typo in a
+    /// string that would otherwise dead-end silently. Debug builds only — `assert` is stripped
+    /// under `-O`, and the app target is out of reach of `swift test`, so this fires when the app
+    /// is run from a debug build, not in CI.
     private static func action(for command: EditCommand) -> Selector {
         let selector = Selector((command.selectorName))
         assert({
@@ -77,7 +79,8 @@ enum EditMenu {
     }
 
     static func makeEditMenu() -> NSMenu {
-        assert(rows.map(\.command) == EditCommand.allCases, "every EditCommand needs a menu row")
+        // Coverage, not order — the menu is free to be reordered.
+        assert(Set(rows.map(\.command)) == Set(EditCommand.allCases), "every EditCommand needs a menu row")
         let menu = NSMenu(title: L10n.edit())
         for row in rows {
             if row.command == .cut { menu.addItem(.separator()) }   // undo/redo above, clipboard below
