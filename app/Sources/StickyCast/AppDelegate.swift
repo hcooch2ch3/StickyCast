@@ -30,6 +30,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Stand up the menu bar before handling URLs so reportError's badge display is valid afterward
         statusMenu = StatusMenuController(appDelegate: self)
 
+        // Without a main menu there is nothing to match ⌘X/⌘C/⌘V/⌘A against, so the clipboard
+        // shortcuts never reach the sticker's text view. See EditMenu.
+        NSApp.mainMenu = EditMenu.makeMainMenu()
+
         // Notification permission: request on first launch (requesting at the first error would swallow that error)
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { _, _ in }
 

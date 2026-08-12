@@ -168,5 +168,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
               let value = LanguageOverride(rawValue: raw) else { return }
         L10n.override = value
         // The menu rebuilds on next open (menuNeedsUpdate), so labels reflect the new language then.
+        // The main menu has no such hook — it is built once — so retitle it by rebuilding here.
+        NSApp.mainMenu = EditMenu.makeMainMenu()
     }
 }

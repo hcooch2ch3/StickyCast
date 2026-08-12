@@ -97,6 +97,14 @@ public enum L10n {
     public static func cancel(_ l: Language = current) -> String { switch l { case .en: "Cancel"; case .ko: "취소" } }
     public static func save(_ l: Language = current) -> String { switch l { case .en: "Save"; case .ko: "저장" } }
 
+    // MARK: Edit menu (carries the standard clipboard key equivalents)
+    public static func undo(_ l: Language = current) -> String { switch l { case .en: "Undo"; case .ko: "실행 취소" } }
+    public static func redo(_ l: Language = current) -> String { switch l { case .en: "Redo"; case .ko: "다시 실행" } }
+    public static func cut(_ l: Language = current) -> String { switch l { case .en: "Cut"; case .ko: "오려두기" } }
+    public static func copy(_ l: Language = current) -> String { switch l { case .en: "Copy"; case .ko: "복사하기" } }
+    public static func paste(_ l: Language = current) -> String { switch l { case .en: "Paste"; case .ko: "붙여넣기" } }
+    public static func selectAll(_ l: Language = current) -> String { switch l { case .en: "Select All"; case .ko: "전체 선택" } }
+
     // MARK: StickyPanelController + AppDelegate errors
     public static func contentTooLargeMB(_ l: Language = current) -> String {
         switch l {

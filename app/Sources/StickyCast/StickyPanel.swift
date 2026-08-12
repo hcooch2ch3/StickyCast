@@ -29,6 +29,15 @@ final class StickyPanel: NSPanel {
     }
     override var canBecomeKey: Bool { true }
 
+    /// ⌘X / ⌘C / ⌘V / ⌘A (and ⌘Z / ⇧⌘Z) inside a sticker. AppKit dispatches menu key equivalents
+    /// through the key window, which a nonactivating panel can't be counted on to be, so the panel
+    /// resolves the shortcut itself and runs it against its own first responder. See EditMenu.
+    /// super runs first so a view-level shortcut (⌘Return → save) keeps priority.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if super.performKeyEquivalent(with: event) { return true }
+        return EditMenu.dispatch(event, in: self)
+    }
+
     /// pin toggle: always-on-top (.floating) ↔ normal (.normal). isFloatingPanel is matched to the level too.
     /// re-assert hidesOnDeactivate=false on every toggle: insurance so the cross-app always-visible invariant (set in init)
     /// isn't shaken by any AppKit flag interaction.
