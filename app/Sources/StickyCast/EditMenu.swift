@@ -40,21 +40,20 @@ enum EditMenu {
         Row(command: .selectAll, title: { L10n.selectAll() }, key: "a"),
     ]
 
-    /// Selectors come from Core's table, which is unit-tested for completeness. The four clipboard
-    /// ones also exist as compile-checked `#selector`s; cross-checking them catches a typo in a
-    /// string that would otherwise dead-end silently. Debug builds only — `assert` is stripped
-    /// under `-O`, and the app target is out of reach of `swift test`, so this fires when the app
-    /// is run from a debug build, not in CI.
-    private static func action(for command: EditCommand) -> Selector {
-        let selector = Selector((command.selectorName))
-        assert({
-            let compileChecked: [EditCommand: Selector] = [
-                .cut: #selector(NSText.cut(_:)), .copy: #selector(NSText.copy(_:)),
-                .paste: #selector(NSText.paste(_:)), .selectAll: #selector(NSText.selectAll(_:)),
-            ]
-            return compileChecked[command].map { $0 == selector } ?? true
-        }(), "EditCommand.\(command).selectorName does not match its #selector")
-        return selector
+    /// Selectors come from Core's table, which `swift test` covers for completeness and shape.
+    /// `verifySelectorTable` cross-checks the four clipboard entries against compile-checked
+    /// `#selector`s, catching a typo like "cutt:" that a string alone would let through. It cannot
+    /// cover `undo:`/`redo:` — `#selector` has no expressible form for them — and it is a debug-only
+    /// guard (`assert` is stripped under `-O`, and this target is out of reach of `swift test`).
+    private static func verifySelectorTable() {
+        let compileChecked: [EditCommand: Selector] = [
+            .cut: #selector(NSText.cut(_:)), .copy: #selector(NSText.copy(_:)),
+            .paste: #selector(NSText.paste(_:)), .selectAll: #selector(NSText.selectAll(_:)),
+        ]
+        for (command, expected) in compileChecked {
+            assert(Selector(command.selectorName) == expected,
+                   "EditCommand.\(command).selectorName does not match its #selector")
+        }
     }
 
     // MARK: Menu
@@ -81,58 +80,14 @@ enum EditMenu {
     static func makeEditMenu() -> NSMenu {
         // Coverage, not order — the menu is free to be reordered.
         assert(Set(rows.map(\.command)) == Set(EditCommand.allCases), "every EditCommand needs a menu row")
+        verifySelectorTable()
         let menu = NSMenu(title: L10n.edit())
         for row in rows {
             if row.command == .cut { menu.addItem(.separator()) }   // undo/redo above, clipboard below
-            let item = menu.addItem(withTitle: row.title(), action: action(for: row.command),
+            let item = menu.addItem(withTitle: row.title(), action: Selector(row.command.selectorName),
                                     keyEquivalent: row.key)
             if row.command == .redo { item.keyEquivalentModifierMask = [.command, .shift] }
         }
         return menu
-    }
-
-    // MARK: Dispatch
-
-    /// Resolve a key event to an edit command and run it against `window`'s own responder chain.
-    /// Returns false for anything unrecognized, or for anything nothing can act on, so the event
-    /// falls through untouched.
-    static func dispatch(_ event: NSEvent, in window: NSWindow) -> Bool {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        guard let command = EditShortcut.command(key: event.charactersIgnoringModifiers ?? "",
-                                                 keyCode: event.keyCode,
-                                                 command: flags.contains(.command),
-                                                 shift: flags.contains(.shift),
-                                                 option: flags.contains(.option),
-                                                 control: flags.contains(.control)),
-              let responder = window.firstResponder
-        else { return false }
-
-        if EditCommand.windowDispatchable.contains(command) {
-            // tryToPerform walks the chain from this window's own first responder — unlike sendAction(to: nil),
-            // which starts at the KEY window and would find nothing while another app holds focus.
-            return responder.tryToPerform(action(for: command), with: nil)
-        }
-        return performUndoOrRedo(command, on: responder)
-    }
-
-    /// Undo and redo can't go through `tryToPerform`: the chain ends at the window, which responds
-    /// to `undo:`/`redo:` by forwarding to its own undo manager, so every ⌘Z would be claimed no
-    /// matter what had focus. Instead reach the editor's own manager directly, and claim the event
-    /// only when there is genuinely something to undo — otherwise ⌘Z falls through as it should.
-    private static func performUndoOrRedo(_ command: EditCommand, on responder: NSResponder) -> Bool {
-        // allowsUndo gates the manager lookup: without it NSTextView falls back up the chain and
-        // hands back the window's undo manager, which belongs to something else entirely.
-        guard command == .undo || command == .redo,
-              let textView = responder as? NSTextView, textView.allowsUndo,
-              let manager = textView.undoManager
-        else { return false }
-        if command == .undo {
-            guard manager.canUndo else { return false }
-            manager.undo()
-        } else {
-            guard manager.canRedo else { return false }
-            manager.redo()
-        }
-        return true
     }
 }

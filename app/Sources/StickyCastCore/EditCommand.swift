@@ -14,8 +14,8 @@ public enum EditCommand: String, CaseIterable, Sendable {
     /// so an unhandled ⌘C falls through untouched. Verified against AppKit: NSWindow responds
     /// undo:/redo: true, cut:/copy:/paste:/selectAll: false; NSTextView is the mirror image.
     ///
-    /// Undo and redo are therefore delivered a different way — straight to the focused editor's
-    /// undo manager, gated on `canUndo`/`canRedo`. See `EditMenu.performUndoOrRedo`.
+    /// Undo and redo are therefore delivered a different way, gated on `canUndo`/`canRedo` so an
+    /// event nothing can act on falls through. See `EditDispatch.performUndoOrRedo`.
     public static let windowDispatchable: [EditCommand] = [.cut, .copy, .paste, .selectAll]
 
     /// The Objective-C selector this command sends. Lives here, away from AppKit, so a missing or
@@ -53,25 +53,28 @@ public enum EditCommand: String, CaseIterable, Sendable {
 public enum EditShortcut {
     /// `key` is the event's characters-ignoring-modifiers; `keyCode` its virtual key code.
     ///
-    /// The character decides whenever the layout produced a Latin letter at all — including a letter
-    /// that maps to no command. Falling back to position in that case would misread every layout
-    /// that merely rearranges the Latin alphabet: on AZERTY the key at the US-A position reports
-    /// "q", so ⌘Q would resolve to select-all; QWERTZ and Dvorak break the same way. The key code is
-    /// consulted only when the character is not a Latin letter — a Cyrillic or Greek layout, where
-    /// no character match is possible and position is the only signal left.
-    public static func command(key: String, keyCode: UInt16? = nil, command: Bool,
+    /// The character decides whenever the layout produced **any** ASCII character — not just a
+    /// letter. Falling back to position for an ASCII character misreads every layout that merely
+    /// rearranges the ASCII set: on AZERTY the key at the US-A position reports "q", so ⌘Q would
+    /// resolve to select-all, and on Dvorak – Right-Handed the US-X key reports "0", so ⌘0 would
+    /// resolve to cut and destroy a selection. (Both verified against the installed layouts.)
+    /// Position is consulted only when the layout produced no ASCII at all — Cyrillic, Greek,
+    /// Devanagari — where no character match is possible and position is the only signal left.
+    public static func command(key: String, keyCode: UInt16?, command: Bool,
                                shift: Bool = false, option: Bool = false,
-                               control: Bool = false) -> EditCommand? {
-        guard command, !option, !control else { return nil }
-        let lowered = key.lowercased()
-        if isLatinLetter(lowered) { return byLetter(lowered, shift: shift) }
+                               control: Bool = false, function: Bool = false) -> EditCommand? {
+        guard command, !option, !control, !function else { return nil }
+        let lowered = key.lowercased()   // locale-independent, so Turkish I lowercases to i, not ı
+        if producedASCII(lowered) { return byLetter(lowered, shift: shift) }
         guard let keyCode else { return nil }
         return EditCommand.allCases.first { $0.keyCode == keyCode && matchesShift($0, shift: shift) }
     }
 
-    private static func isLatinLetter(_ key: String) -> Bool {
-        guard key.count == 1, let scalar = key.unicodeScalars.first else { return false }
-        return scalar >= "a" && scalar <= "z"
+    /// Did the layout give a definite single ASCII character? If so it is trustworthy on its own and
+    /// position must not override it.
+    private static func producedASCII(_ key: String) -> Bool {
+        guard key.unicodeScalars.count == 1, let scalar = key.unicodeScalars.first else { return false }
+        return scalar.isASCII
     }
 
     private static func byLetter(_ key: String, shift: Bool) -> EditCommand? {

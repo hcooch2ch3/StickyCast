@@ -3,38 +3,38 @@ import XCTest
 
 final class EditShortcutTests: XCTestCase {
     func testClipboardShortcuts() {
-        XCTAssertEqual(EditShortcut.command(key: "x", command: true), .cut)
-        XCTAssertEqual(EditShortcut.command(key: "c", command: true), .copy)
-        XCTAssertEqual(EditShortcut.command(key: "v", command: true), .paste)
-        XCTAssertEqual(EditShortcut.command(key: "a", command: true), .selectAll)
+        XCTAssertEqual(EditShortcut.command(key: "x", keyCode: 7, command: true), .cut)
+        XCTAssertEqual(EditShortcut.command(key: "c", keyCode: 8, command: true), .copy)
+        XCTAssertEqual(EditShortcut.command(key: "v", keyCode: 9, command: true), .paste)
+        XCTAssertEqual(EditShortcut.command(key: "a", keyCode: 0, command: true), .selectAll)
     }
 
     func testUndoAndRedoDifferOnlyByShift() {
-        XCTAssertEqual(EditShortcut.command(key: "z", command: true), .undo)
-        XCTAssertEqual(EditShortcut.command(key: "z", command: true, shift: true), .redo)
+        XCTAssertEqual(EditShortcut.command(key: "z", keyCode: 6, command: true), .undo)
+        XCTAssertEqual(EditShortcut.command(key: "z", keyCode: 6, command: true, shift: true), .redo)
     }
 
     /// charactersIgnoringModifiers reports an uppercase letter when shift is held.
     func testUppercaseKeyMatches() {
-        XCTAssertEqual(EditShortcut.command(key: "Z", command: true, shift: true), .redo)
-        XCTAssertEqual(EditShortcut.command(key: "A", command: true), .selectAll)
+        XCTAssertEqual(EditShortcut.command(key: "Z", keyCode: 6, command: true, shift: true), .redo)
+        XCTAssertEqual(EditShortcut.command(key: "A", keyCode: 0, command: true), .selectAll)
     }
 
     func testWithoutCommandNothingMatches() {
         for key in ["x", "c", "v", "a", "z"] {
-            XCTAssertNil(EditShortcut.command(key: key, command: false), "bare \(key) must not match")
+            XCTAssertNil(EditShortcut.command(key: key, keyCode: 8, command: false), "bare \(key) must not match")
         }
     }
 
     /// Swallowing ⌥⌘C or ⌃⌘C would silently break whatever else binds them.
     func testExtraModifiersDoNotMatch() {
-        XCTAssertNil(EditShortcut.command(key: "c", command: true, option: true))
-        XCTAssertNil(EditShortcut.command(key: "c", command: true, control: true))
-        XCTAssertNil(EditShortcut.command(key: "v", command: true, shift: true))
-        XCTAssertNil(EditShortcut.command(key: "a", command: true, shift: true))
-        XCTAssertNil(EditShortcut.command(key: "c", command: true, shift: true))
-        XCTAssertNil(EditShortcut.command(key: "x", command: true, shift: true))
-        XCTAssertNil(EditShortcut.command(key: "z", command: true, shift: true, option: true))
+        XCTAssertNil(EditShortcut.command(key: "c", keyCode: 8, command: true, option: true))
+        XCTAssertNil(EditShortcut.command(key: "c", keyCode: 8, command: true, control: true))
+        XCTAssertNil(EditShortcut.command(key: "v", keyCode: 9, command: true, shift: true))
+        XCTAssertNil(EditShortcut.command(key: "a", keyCode: 0, command: true, shift: true))
+        XCTAssertNil(EditShortcut.command(key: "c", keyCode: 8, command: true, shift: true))
+        XCTAssertNil(EditShortcut.command(key: "x", keyCode: 7, command: true, shift: true))
+        XCTAssertNil(EditShortcut.command(key: "z", keyCode: 6, command: true, shift: true, option: true))
     }
 
     /// On a Cyrillic or Greek layout ⌘C reports "с", so the letter can't match. The key code is
@@ -49,8 +49,9 @@ final class EditShortcutTests: XCTestCase {
         XCTAssertNil(EditShortcut.command(key: "с", keyCode: 8, command: true, shift: true))
     }
 
-    /// The letter wins over the key code, so a remapped layout (Dvorak) sends the command its
-    /// labelled key promises rather than the one in the US position.
+    /// The character wins over the key code, so a layout that swaps two tracked keys sends the
+    /// command its label promises. Turkish F is the real instance: it puts "v" at the US-C position
+    /// and "c" at the US-V position.
     func testLetterWinsOverKeyCode() {
         XCTAssertEqual(EditShortcut.command(key: "c", keyCode: 9, command: true), .copy)
     }
@@ -82,11 +83,30 @@ final class EditShortcutTests: XCTestCase {
         XCTAssertEqual(EditCommand.windowDispatchable, [.cut, .copy, .paste, .selectAll])
         XCTAssertFalse(EditCommand.windowDispatchable.contains(.undo))
         XCTAssertFalse(EditCommand.windowDispatchable.contains(.redo))
+        // Fails when a seventh command is added without deciding how it dispatches.
+        XCTAssertEqual(Set(EditCommand.windowDispatchable).union([.undo, .redo]),
+                       Set(EditCommand.allCases))
+    }
+
+    /// An ASCII character that maps to no command must not fall back to position either. Dvorak –
+    /// Right-Handed puts "0" at the US-X position, so ⌘0 would have resolved to cut and destroyed
+    /// a selection; Dvorak – Left-Handed puts "-" at US-A and "'" at US-Z.
+    func testAsciiPunctuationAndDigitsDoNotFallBackToKeyCode() {
+        XCTAssertNil(EditShortcut.command(key: "0", keyCode: 7, command: true))   // Dvorak-R ⌘0
+        XCTAssertNil(EditShortcut.command(key: "7", keyCode: 0, command: true))   // Dvorak-R ⌘7
+        XCTAssertNil(EditShortcut.command(key: "9", keyCode: 6, command: true))   // Dvorak-R ⌘9
+        XCTAssertNil(EditShortcut.command(key: "-", keyCode: 0, command: true))   // Dvorak-L ⌘-
+        XCTAssertNil(EditShortcut.command(key: ";", keyCode: 6, command: true))   // Dvorak ⌘;
+    }
+
+    /// fn is inside deviceIndependentFlagsMask, so it has to disqualify like option and control.
+    func testFunctionModifierDoesNotMatch() {
+        XCTAssertNil(EditShortcut.command(key: "c", keyCode: 8, command: true, function: true))
     }
 
     func testUnrelatedKeysDoNotMatch() {
-        XCTAssertNil(EditShortcut.command(key: "q", command: true))
-        XCTAssertNil(EditShortcut.command(key: "", command: true))
-        XCTAssertNil(EditShortcut.command(key: "\r", command: true))   // ⌘Return stays the save shortcut
+        XCTAssertNil(EditShortcut.command(key: "q", keyCode: 12, command: true))
+        XCTAssertNil(EditShortcut.command(key: "", keyCode: 36, command: true))   // ⌘Return: no character, no match
+        XCTAssertNil(EditShortcut.command(key: "\r", keyCode: 36, command: true))   // ⌘Return stays the save shortcut
     }
 }

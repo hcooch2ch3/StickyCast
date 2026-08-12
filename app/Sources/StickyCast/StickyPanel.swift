@@ -1,4 +1,5 @@
 import AppKit
+import StickyCastCore
 
 final class StickyPanel: NSPanel {
     init(frame: NSRect) {
@@ -29,14 +30,19 @@ final class StickyPanel: NSPanel {
     }
     override var canBecomeKey: Bool { true }
 
-    /// ⌘X / ⌘C / ⌘V / ⌘A / ⌘Z / ⇧⌘Z inside a sticker: the panel resolves the shortcut itself and
-    /// runs it against its own first responder, so it works without depending on this panel being
-    /// the key window. Undo takes a separate route — see EditCommand.windowDispatchable.
+    /// ⌘X / ⌘C / ⌘V / ⌘A / ⌘Z / ⇧⌘Z inside a sticker.
+    ///
+    /// This does NOT escape the key-window requirement — AppKit only calls performKeyEquivalent on
+    /// the key window, the same precondition a menu key equivalent needs. What it buys is running
+    /// FIRST, which is what lets undo repair the SwiftUI binding the menu route silently corrupts
+    /// (see EditDispatch.performUndoOrRedo). Whether the menu alone would serve the other four is
+    /// still unmeasured; if it would, this override can go.
+    ///
     /// super runs first so any view-level shortcut keeps priority over this interceptor. Nothing
     /// collides today — ⌘Return (save) and Esc (cancel) never match — but the order is the invariant.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if super.performKeyEquivalent(with: event) { return true }
-        return EditMenu.dispatch(event, in: self)
+        return EditDispatch.perform(event, in: self)
     }
 
     /// pin toggle: always-on-top (.floating) ↔ normal (.normal). isFloatingPanel is matched to the level too.
