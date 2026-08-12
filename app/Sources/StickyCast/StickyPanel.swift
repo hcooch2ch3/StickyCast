@@ -45,12 +45,19 @@ final class StickyPanel: NSPanel {
         return EditDispatch.perform(event, in: self)
     }
 
+    /// The level this panel belongs at, pin state and nothing else. MissionControlRaiseKeeper lifts a
+    /// panel above its own level for a moment and needs somewhere truthful to drop it back to: reading
+    /// `level` at lift time would freeze whatever the pin state happened to be then, and a toggle during
+    /// the lift would leave the two disagreeing.
+    private(set) var restingLevel: NSWindow.Level = .normal
+
     /// pin toggle: always-on-top (.floating) ↔ normal (.normal). isFloatingPanel is matched to the level too.
     /// re-assert hidesOnDeactivate=false on every toggle: insurance so the cross-app always-visible invariant (set in init)
     /// isn't shaken by any AppKit flag interaction.
     func applyPinned(_ pinned: Bool) {
         hidesOnDeactivate = false
-        level = pinned ? .floating : .normal
+        restingLevel = pinned ? .floating : .normal
+        level = restingLevel
         isFloatingPanel = pinned
     }
 }

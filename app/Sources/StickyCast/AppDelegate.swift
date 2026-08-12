@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let fileWatcher = FileWatcher()               // Live Sync: watch linked sticker files
     private var suppressedNotes: Set<UUID> = []   // ⬆️ suppress the self-write right after saving
     private let readGen = ReadGeneration()        // discard out-of-order file-read completions: latest-wins
+    private let raiseKeeper = MissionControlRaiseKeeper()   // a Mission Control raise gets undone without this
 
     // The "hide/show all" toggle label derives from actual window visibility, not a separate state bool
     // (a global bool drifts from per-window state and the label lies).
@@ -24,6 +25,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pendingURLs: [URL] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        raiseKeeper.start()
+
         let screen = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
         store = StickyStore(defaults: .standard, screenFrame: screen)
 
